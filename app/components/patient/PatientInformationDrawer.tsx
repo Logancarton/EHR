@@ -25,6 +25,7 @@ import {
   intakeAdministrativeSteps,
 } from "../../domain/patient-administration";
 import { api } from "../../lib/api-client";
+import type { PatientInfoSection } from "../../lib/chart-index";
 import type { ReleaseSummary } from "../../server/services/release-authorization-service";
 import { refreshPatientRoster } from "../../lib/patient-roster";
 import { WORKSPACE_PATIENT_UPDATED_EVENT, dispatchWorkspaceEvent } from "../../lib/workspace-events";
@@ -51,7 +52,7 @@ import { practiceToday } from "../../lib/practice-calendar";
  * its own save state and a failure stays on screen with a way to try again.
  */
 
-type Section = "intake" | "identity" | "contact" | "people" | "network" | "coverage" | "pharmacy" | "releases";
+type Section = PatientInfoSection;
 
 const SECTIONS: ReadonlyArray<{ id: Section; label: string; icon: string }> = [
   { id: "identity", label: "Identity", icon: "badge" },

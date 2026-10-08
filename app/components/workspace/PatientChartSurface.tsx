@@ -18,9 +18,13 @@ import {
   announceCareCompletionChange,
 } from "../../lib/care-completion-api";
 import {
+  WORKSPACE_OPEN_COMPANION_EVENT,
   WORKSPACE_ORDER_CART_UPDATED_EVENT,
+  dispatchWorkspaceEvent,
   subscribeWorkspaceEvent,
 } from "../../lib/workspace-events";
+import { CHART_INDEX, type ChartIndexTarget, type PatientInfoSection } from "../../lib/chart-index";
+import Icon from "../ui/Icon";
 
 export interface PatientChartSurfaceProps {
   patient: Patient;
@@ -29,7 +33,8 @@ export interface PatientChartSurfaceProps {
   columnsOpen: boolean;
   setColumnsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   preferences: ProviderPreferences;
-  onOpenPatientInformation: () => void;
+  /** Opens Patient information, at a section when one is named. */
+  onOpenPatientInformation: (section?: PatientInfoSection) => void;
   onOpenCustomizer: () => void;
   stagedOrdersCount: number;
   onOpenOrderCart: () => void;
@@ -116,6 +121,18 @@ export default function PatientChartSurface({
     }
   }, [pinned, patient.id, readPinState]);
 
+  const openChartIndexTarget = (target: ChartIndexTarget) => {
+    dismissMore();
+    if (target.kind === "section") {
+      onSectionChange(target.section);
+      setColumnsOpen(false);
+    } else if (target.kind === "companion") {
+      dispatchWorkspaceEvent(WORKSPACE_OPEN_COMPANION_EVENT, { tool: target.tool });
+    } else {
+      onOpenPatientInformation(target.section);
+    }
+  };
+
   return (
     <section
       className="primary-workspace-pane"
@@ -130,12 +147,29 @@ export default function PatientChartSurface({
               pressed={section === "Overview"} onClick={() => { onSectionChange("Overview"); setColumnsOpen(false); }}>Overview</Button>
             <Button size="sm" variant={section === "Encounter" ? "primary" : "secondary"}
               pressed={section === "Encounter"} onClick={() => { onSectionChange("Encounter"); setColumnsOpen(false); }}>Encounter</Button>
-            <Button size="sm" variant="tertiary" onClick={onOpenPatientInformation}>Patient info</Button>
-            <details className="patient-workspace-more" ref={moreRef} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
-              <summary>More chart tools</summary>
-              <div>
-                <Button size="sm" pressed={pinned === true} loading={pinBusy} onClick={() => void togglePin()}>{pinned ? "On worklist" : "Worklist"}</Button>
-                <Button size="sm" pressed={columnsOpen} onClick={() => setColumnsOpen((open) => !open)}>{columnsOpen ? "Close columns" : "Columns"}</Button>
+            <Button size="sm" variant="tertiary" onClick={() => onOpenPatientInformation()}>Patient info</Button>
+            <details className="patient-workspace-more chart-index" ref={moreRef} onToggle={(event) => setMoreOpen(event.currentTarget.open)}>
+              <summary aria-label={`Chart index for ${patient.name}`}>
+                <Icon name="menu_book" size="sm" /> Chart
+              </summary>
+              <div className="chart-index-panel">
+                {CHART_INDEX.map((group) => (
+                  <nav key={group.label} className="chart-index-group" aria-label={group.label}>
+                    <span className="chart-index-heading">{group.label}</span>
+                    {group.entries.map((entry) => (
+                      <button key={entry.id} type="button" className="chart-index-entry" onClick={() => openChartIndexTarget(entry.target)}>
+                        <Icon name={entry.icon} size="sm" />
+                        <span>{entry.label}</span>
+                        <small>{entry.where}</small>
+                      </button>
+                    ))}
+                  </nav>
+                ))}
+                <div className="chart-index-group chart-index-tools" role="group" aria-label="Chart tools">
+                  <span className="chart-index-heading">Tools</span>
+                  <Button size="sm" pressed={pinned === true} loading={pinBusy} onClick={() => void togglePin()}>{pinned ? "On worklist" : "Worklist"}</Button>
+                  <Button size="sm" pressed={columnsOpen} onClick={() => setColumnsOpen((open) => !open)}>{columnsOpen ? "Close columns" : "Columns"}</Button>
+                </div>
               </div>
             </details>
           </div>

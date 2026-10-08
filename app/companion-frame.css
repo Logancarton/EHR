@@ -42,6 +42,18 @@ html[data-companion-layout="single"][data-companion-open="true"] .rail-resize-ri
 .patient-header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .patient-workspace-more { position: relative; }
 .patient-workspace-more > summary { cursor: pointer; padding: 8px; font-size: 13px; }
+/* Chart index: every part of the chart in one list, opening where it lives. */
+.chart-index > summary { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border: 1px solid var(--m3-border); border-radius: 999px; font-weight: 600; list-style: none; }
+.chart-index > summary::-webkit-details-marker { display: none; }
+.chart-index[open] > summary { background: var(--tint-blue); border-color: var(--m3-tertiary-container); color: var(--m3-primary); }
+.patient-workspace-more > div.chart-index-panel { grid-template-columns: repeat(2, minmax(13rem, 1fr)); gap: 4px 16px; min-width: 30rem; max-width: min(36rem, calc(100vw - 32px)); max-height: min(70vh, 34rem); overflow-y: auto; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); }
+.chart-index-group { display: grid; align-content: start; gap: 2px; }
+.chart-index-heading { padding: 4px 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--m3-text-secondary); }
+.chart-index-entry { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 7px 8px; border: 0; border-radius: 8px; background: none; color: var(--m3-text-primary); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.chart-index-entry:hover, .chart-index-entry:focus-visible { background: var(--m3-surface-container-high); }
+.chart-index-entry small { font-size: 11px; color: var(--m3-text-secondary); }
+.chart-index-tools { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--m3-border); }
+@media (max-width: 720px) { .patient-workspace-more > div.chart-index-panel { grid-template-columns: 1fr; min-width: min(20rem, calc(100vw - 32px)); } }
 .patient-workspace-more > div { position: absolute; right: 0; z-index: var(--z-popover); display: grid; gap: 8px; padding: 12px; background: var(--m3-surface); border: 1px solid var(--m3-border); border-radius: 12px; min-width: 160px; }
 .patient-record-picker { display: grid; gap: 6px; font-size: 14px; }
 .patient-record-picker select { width: 100%; min-width: 0; padding: 8px; font-size: 14px; }

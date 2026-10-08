@@ -8,6 +8,7 @@ import WorkspaceCustomizer from "./WorkspaceCustomizer";
 import ClinicalMonitoringSettingsModal from "./ClinicalMonitoringSettingsModal";
 import OrderCartModal from "./orders/OrderCartModal";
 import PatientInformationDrawer from "./patient/PatientInformationDrawer";
+import type { PatientInfoSection } from "../lib/chart-index";
 import WorkspaceTopBar from "./workspace/WorkspaceTopBar";
 import WorkspaceTabStrip from "./workspace/WorkspaceTabStrip";
 import WorkspaceCompanionRail from "./workspace/WorkspaceCompanionRail";
@@ -190,6 +191,7 @@ export default function PatientWorkspace() {
   const [globalAiPrompt, setGlobalAiPrompt] = useState("");
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [patientInfoOpen, setPatientInfoOpen] = useState(false);
+  const [patientInfoSection, setPatientInfoSection] = useState<PatientInfoSection | undefined>(undefined);
   const [clinicalMonitoringOpen, setClinicalMonitoringOpen] = useState(false);
 
   const omnibox = useOmniboxController({
@@ -314,7 +316,7 @@ export default function PatientWorkspace() {
       onInsertText: () => showToast("Inserted context into active encounter!"),
       onEncounterSigned: handleEncounterSigned,
       onNavigateSection: (next) => tabs.setSection(next),
-      onOpenAdminDrawer: () => setPatientInfoOpen(true),
+      onOpenAdminDrawer: () => { setPatientInfoSection(undefined); setPatientInfoOpen(true); },
       onUpdatePreferences: persistPreferences,
     }),
     [
@@ -344,7 +346,7 @@ export default function PatientWorkspace() {
       onInsertText: () => showToast("Inserted context into active encounter!"),
       onEncounterSigned: handleEncounterSigned,
       onNavigateSection: (next) => tabs.setPatientSection(patientId, next),
-      onOpenAdminDrawer: () => setPatientInfoOpen(true),
+      onOpenAdminDrawer: () => { setPatientInfoSection(undefined); setPatientInfoOpen(true); },
       onUpdatePreferences: persistPreferences,
     }),
     [orders, companionData, showToast, handleEncounterSigned, tabs, persistPreferences],
@@ -568,7 +570,10 @@ export default function PatientWorkspace() {
                 columnsOpen={columnsOpen}
                 setColumnsOpen={setColumnsOpen}
                 preferences={preferences}
-                onOpenPatientInformation={() => setPatientInfoOpen(true)}
+                onOpenPatientInformation={(infoSection) => {
+                  setPatientInfoSection(infoSection);
+                  setPatientInfoOpen(true);
+                }}
                 onOpenCustomizer={() => prefsController.setCustomizerOpen(true)}
                 stagedOrdersCount={
                   (orders.byPatient[activePatient.id] || []).length
@@ -718,9 +723,10 @@ export default function PatientWorkspace() {
 
         {patientInfoOpen && activePatient && (
           <PatientInformationDrawer
-            key={activePatient.id}
+            key={`${activePatient.id}:${patientInfoSection ?? "identity"}`}
             patientId={activePatient.id}
             patientName={activePatient.name}
+            initialSection={patientInfoSection}
             onClose={() => setPatientInfoOpen(false)}
           />
         )}
