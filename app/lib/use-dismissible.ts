@@ -31,8 +31,10 @@ export type DismissibleOptions = {
   active: boolean;
   onDismiss: () => void;
   /**
-   * What counts as "inside" for an outside click. Required when
-   * `dismissOnOutsideClick` is set; ignored otherwise.
+   * The surface's own element. What counts as "inside" for an outside click
+   * (required when `dismissOnOutsideClick` is set), and, for a surface that is
+   * itself a dialog, what makes a keystroke from inside it its own rather than a
+   * dialog layered above.
    */
   surface?: RefObject<HTMLElement | null>;
   /** A popover closes when you click past it; a full workspace surface does not. */
@@ -64,9 +66,18 @@ export type DismissibleOptions = {
  * surrounding surface would throw away what the clinician was typing — unless the
  * surface is itself layered above the field, which is what `fromTextEntry` says.
  */
-function keystrokeBelongsToSomethingElse(target: EventTarget | null, fromTextEntry: boolean): boolean {
+function keystrokeBelongsToSomethingElse(
+  target: EventTarget | null,
+  fromTextEntry: boolean,
+  ownSurface: HTMLElement | null,
+): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  if (target.closest("[role='dialog']")) return true;
+  // A dialog layered above answers first. The exception is a layer that is itself
+  // a dialog and declares it sits above its own fields (the Open-workspace
+  // launcher and its search box): a keystroke from inside it is its own. Dialogs
+  // holding typed work do not declare that, and keep ignoring Escape.
+  const dialog = target.closest("[role='dialog']");
+  if (dialog && !(fromTextEntry && ownSurface?.contains(dialog))) return true;
   if (fromTextEntry) return false;
   return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 }
@@ -110,7 +121,15 @@ function handleEscape(event: KeyboardEvent) {
   const top = topmostLayer(escapeLayers);
   if (!top) return;
   const options = top.options.current;
-  if (keystrokeBelongsToSomethingElse(event.target, options.dismissFromTextEntry ?? false)) return;
+  if (
+    keystrokeBelongsToSomethingElse(
+      event.target,
+      options.dismissFromTextEntry ?? false,
+      options.surface?.current ?? null,
+    )
+  ) {
+    return;
+  }
   markEscapeHandled(event);
   options.onDismiss();
 }

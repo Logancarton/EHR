@@ -325,7 +325,12 @@ export default function OpenWorkspaceLauncher({
     onClose();
     anchorRef.current?.focus();
   }, [onClose, anchorRef]);
-  useDismissible({ active: isOpen, onDismiss: dismissLauncher, dismissFromTextEntry: true });
+  useDismissible({
+    active: isOpen,
+    onDismiss: dismissLauncher,
+    dismissFromTextEntry: true,
+    surface: launcherRef,
+  });
 
   useEffect(() => {
     if (!isOpen) return;

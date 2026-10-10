@@ -8,6 +8,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### RELIABILITY-ESCAPE-1 — Escape closes the Open-workspace launcher again (2026-10-10)
+
+- **Starting SHA:** a4ccd91. `gh` is now installed and authenticated on the development Mac, so CI logs and failure evidence can be read (`gh run view <id> --log-failed`, `gh run download <id>`).
+- **CI evidence:** the run on `a4ccd91` passed 74 of 77 files. `escape-layering`, `team-retirement` and `workspace-open-launcher` failed, even on retry, and they had also failed on `e3681a7` and `a272f2b`. All three pressed Escape and the launcher stayed open. CI's page snapshot showed focus in the launcher's "Find workspace or patient" box.
+- **Cause:** the launcher is `role="dialog"` and moves focus into its search box 30 ms after opening. The shared Escape stack ignored any keystroke from inside a dialog, its own included. So, for a person, Escape never closed the launcher. Tests passed locally only because they pressed Escape within those 30 ms.
+- **Fix:** a layer that declares it sits above its own fields (`dismissFromTextEntry`) and passes its own `surface` now answers Escape from inside its own dialog. Dialogs holding typed work (message compose, lab follow-up task) do not declare it and keep ignoring Escape. The launcher passes its popover as `surface`.
+- **Tests:** `workspace-open-launcher` and `escape-layering` now wait for focus to reach the launcher's search box before pressing Escape, the timing a clinician produces. Without the fix both fail locally, and with it they pass.
+- **Validation:** `npm run check` 686/686; `npm run build` passed; browser clinical-decomposition 27/27, communication-companion 5/5, dismissal 7/7, escape-layering 5/5, intake-workspace 5/5, team-retirement 5/5, workspace-layering 13/13, workspace-open-launcher 7/7.
+
 ### RELIABILITY-SCHEDULE-1 — a failed schedule refresh keeps the day on screen; chunked browser gate (2026-10-10)
 
 - **Starting SHA:** 4acc1d3.

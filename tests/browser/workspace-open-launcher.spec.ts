@@ -176,9 +176,12 @@ test.describe("UI-1: Universal Open workspace launcher", () => {
     const launcherBtn = page.locator("button[data-workspace-control='open-workspace-launcher']");
     const popover = page.locator("[data-testid='open-workspace-launcher-popover']");
 
-    // 1. Open via click
+    // 1. Open via click. The launcher puts the cursor in its search box a moment
+    // after opening; wait for that, because it is where a clinician presses Escape.
+    // Pressing sooner only exercised the instant before focus moved.
     await launcherBtn.click();
     await expect(popover).toBeVisible();
+    await expect(popover.getByRole("textbox", { name: "Find workspace or patient" })).toBeFocused();
 
     // 2. Escape dismisses popover and returns focus to launcher button
     await page.keyboard.press("Escape");

@@ -90,6 +90,8 @@ test.describe("CB-6f Escape answers one layer at a time", () => {
     await plus.click();
     const launcher = page.locator(".open-workspace-popover");
     await expect(launcher).toBeVisible();
+    // Escape from where the cursor actually is once the launcher has opened.
+    await expect(launcher.getByRole("textbox", { name: "Find workspace or patient" })).toBeFocused();
 
     await page.keyboard.press("Escape");
     await expect(launcher).toHaveCount(0);
