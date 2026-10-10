@@ -63,4 +63,73 @@ test.describe("Clinical AI Companion Panel", () => {
       await expect(page.locator("#ai-composer-input:visible")).toHaveCount(0);
     }
   });
+
+  test("keeps one conversation per patient across follow-ups, chart switches and clearing (D-132 CONV-1)", async ({ page }) => {
+    await signInWithDefaultLayout(page, "Prototype provider");
+
+    const maya = page.locator('.browser-tab[data-workspace-tab="patient"]').filter({ hasText: "Maya Chen" });
+    await maya.click();
+    await page.locator(".companion-rail-btn[aria-label='Clinical AI']").click();
+    const panel = page.getByRole("complementary", { name: "Clinical AI Companion", exact: true });
+    const input = panel.locator("#ai-composer-input");
+    const turns = panel.locator(".ai-thread-turns > li");
+
+    // First question, then a follow-up that names nobody: both stay with Maya.
+    await input.fill("What medications is she taking?");
+    const [first] = await Promise.all([
+      page.waitForRequest((candidate) => candidate.url().includes("/api/ai/omnibox/plan")),
+      input.press("Enter"),
+    ]);
+    expect(first.postDataJSON().activePatientId).toBe("maya-chen");
+    await expect(turns).toHaveCount(1);
+    await expect(turns.first()).toHaveAttribute("data-ai-turn-status", "answered", { timeout: 20_000 });
+
+    await input.fill("Summarize chart");
+    const [followUp] = await Promise.all([
+      page.waitForRequest((candidate) => candidate.url().includes("/api/ai/omnibox/plan")),
+      input.press("Enter"),
+    ]);
+    expect(followUp.postDataJSON().activePatientId).toBe("maya-chen");
+    await expect(turns).toHaveCount(2);
+    await expect(turns.nth(1)).toHaveAttribute("data-ai-turn-status", "answered", { timeout: 20_000 });
+
+    // The earlier answer collapses to one line and reopens on demand; the latest stays open.
+    await expect(turns.first().locator("[data-omnibox-plan-card]")).toHaveCount(0);
+    await expect(turns.first().locator(".ai-turn-question")).toContainText("What medications is she taking?");
+    await expect(turns.nth(1).locator("[data-omnibox-plan-answer]")).toContainText("Bounded chart recap for Maya Chen");
+    await turns.first().locator(".ai-turn-summary").click();
+    await expect(turns.first().locator("[data-omnibox-plan-card]")).toBeVisible();
+    await turns.first().getByRole("button", { name: "Collapse" }).click();
+    await expect(turns.first().locator("[data-omnibox-plan-card]")).toHaveCount(0);
+
+    // Naming another patient answers about them, says so, and leaves the thread with Maya.
+    await input.fill("What medications is David Kim taking?");
+    await input.press("Enter");
+    await expect(turns).toHaveCount(3);
+    const aboutDavid = turns.nth(2);
+    await expect(aboutDavid).toHaveAttribute("data-ai-turn-status", "answered", { timeout: 20_000 });
+    await expect(aboutDavid.locator("[data-ai-turn-other-patient]")).toContainText(
+      "This answer is about David Kim, not Maya Chen",
+    );
+    // An answer about David cannot be inserted into Maya's note.
+    await expect(aboutDavid.getByRole("button", { name: "Insert into Note" })).toHaveCount(0);
+    await expect(panel.locator("#ai-target-context-label")).toContainText("Maya Chen");
+    await page.screenshot({ path: "output/playwright/conv-1-thread.png" });
+
+    // Another chart in front parks the panel; returning restores the same conversation.
+    const otherTab = page.locator('.browser-tab[data-workspace-tab="patient"]:not(.active)').first();
+    await otherTab.click();
+    await expect(page.locator("aside.companion-ai-panel[data-patient-tool='clinical-ai']")).toContainText("Clinical AI is parked");
+    await maya.click();
+    await expect(turns).toHaveCount(3);
+    await expect(turns.first().locator(".ai-turn-question")).toContainText("What medications is she taking?");
+
+    // Closing and reopening the panel keeps it too; clearing empties it.
+    await panel.getByRole("button", { name: /close/i }).first().click();
+    await page.locator(".companion-rail-btn[aria-label='Clinical AI']").click();
+    await expect(turns).toHaveCount(3);
+    await panel.getByRole("button", { name: "Clear conversation" }).click();
+    await expect(turns).toHaveCount(0);
+    await expect(panel.locator(".ai-empty-state")).toBeVisible();
+  });
 });

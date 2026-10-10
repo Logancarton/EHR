@@ -8,6 +8,13 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### CONV-1 — one conversation thread per patient in Clinical AI (owner direction 2026-10-09, D-132)
+
+- **Starting SHA:** b3ad7d2.
+- **Change:** the Clinical AI companion keeps each patient's questions and answers in order instead of replacing the last answer (`app/lib/clinical-ai-thread.ts`, `ClinicalAiPanel`). Earlier turns collapse to one line and reopen; the latest stays open; "Clear conversation" empties it. The thread's patient is the planner's active patient for every turn. An answer that resolved to another named patient is labelled and offers no Insert into Note. A late answer lands only in its own thread and cannot revive a cleared thread or dismissed turn; one question at a time per thread. Threads survive chart switches (panel parks), close/reopen and expand/redock, live only in the browser session, and are dropped at sign-out and account switch (`AuthSessionGate`). Requirements CONV-01, CONV-06 (thread part); RIGHT-04.
+- **Validation:** `npm run check` 679/679 (0 lint errors; new `tests/clinical-ai-thread.test.ts` 10/10); `npm run build` passed; browser specs companion-ai 2/2 (new: two turns sent with `activePatientId` maya-chen, earlier turn collapses/reopens, a David Kim question is labelled and has no Insert into Note, thread survives parking and close/reopen, Clear empties it), workspace-ergonomics 5/5, review-improvements 5/5. Screenshot inspected at 1280×720 (`output/playwright/conv-1-thread.png`); an overflow of the notice and evidence chips past the panel edge was found and fixed before this entry.
+- **Named gaps:** the planner does not read earlier turns (CONV-1b); the name/DOB check for a named patient is not in place (CONV-1b); not checked at 200% zoom or phone width.
+
 ### OVERVIEW-EXPAND-1 — sections can open all details by default (owner request 2026-10-08, D-131)
 
 - **Starting SHA:** 8cd613e.

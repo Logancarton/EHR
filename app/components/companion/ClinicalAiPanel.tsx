@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { type Patient, type Section } from "../../domain/patient";
 import { usePatientRoster } from "../../lib/patient-roster";
 import {
@@ -8,7 +8,7 @@ import {
   defaultPreferences,
   parseAiPreferenceCommand,
 } from "../../lib/preference-engine";
-import type { OmniboxPlan, OmniboxSurface, OmniboxWorkspaceTarget } from "../../domain/omnibox";
+import type { OmniboxSurface, OmniboxWorkspaceTarget } from "../../domain/omnibox";
 import { omniboxPlanFailureMessage, requestOmniboxPlan } from "../../lib/omnibox-plan-client";
 import OmniboxPlanCard, {
   type OmniboxDeferConfirmation,
@@ -28,6 +28,21 @@ import {
 import { api } from "../../lib/api-client";
 import Icon from "../ui/Icon";
 import CompanionPanelFrame from "./CompanionPanelFrame";
+import {
+  type ClinicalAiTurn,
+  beginClinicalAiTurn,
+  clearClinicalAiThread,
+  clinicalAiThreadFor,
+  dismissClinicalAiTurn,
+  settleClinicalAiTurn,
+  subscribeClinicalAiThreads,
+  threadHasPendingTurn,
+  turnAnswersForAnotherPatient,
+  turnSummary,
+} from "../../lib/clinical-ai-thread";
+
+/** Thread key for the practice schedule view, which has no patient. */
+const PRACTICE_THREAD_KEY = "practice";
 
 function surfaceFromSection(section: Section | undefined): OmniboxSurface {
   switch (section) {
@@ -84,11 +99,19 @@ export default function ClinicalAiPanel({
 }) {
   const { patients: roster } = usePatientRoster();
   const [customAiText, setCustomAiText] = useState("");
-  const [plan, setPlan] = useState<OmniboxPlan | null>(null);
-  const [planLoading, setPlanLoading] = useState(false);
-  const [planError, setPlanError] = useState("");
-  const [layoutFeedback, setLayoutFeedback] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // Earlier turns the clinician reopened; the latest turn is always open.
+  const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<string>>(() => new Set());
+  // One thread per patient (D-132). The practice schedule view keeps its own.
+  const threadKey = isScheduleView ? PRACTICE_THREAD_KEY : patient.id;
+  const turns = useSyncExternalStore(
+    subscribeClinicalAiThreads,
+    () => clinicalAiThreadFor(threadKey),
+    () => clinicalAiThreadFor(threadKey),
+  );
+  const planLoading = turns.some((turn) => turn.status === "pending");
+  const latestTurnRef = useRef<HTMLLIElement | null>(null);
+  const latestTurnId = turns.at(-1)?.id;
   const [aiEngineStatus, setAiEngineStatus] = useState<{
     provider: string;
     activeModel: string;
@@ -113,18 +136,11 @@ export default function ClinicalAiPanel({
     };
   }, []);
 
-  const activeScopeRef = useRef({ patientId: patient.id, isScheduleView });
-  activeScopeRef.current = { patientId: patient.id, isScheduleView };
-  const requestIdRef = useRef(0);
-
-  // Target context isolation: drop plan and reset state whenever patient or schedule view switches (RIGHT-04)
+  // Bring a new turn into view as it is asked and again when it settles.
+  const latestTurnStatus = turns.at(-1)?.status;
   useEffect(() => {
-    requestIdRef.current++;
-    setPlan(null);
-    setPlanError("");
-    setPlanLoading(false);
-    setLayoutFeedback(null);
-  }, [patient.id, isScheduleView]);
+    latestTurnRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [latestTurnId, latestTurnStatus]);
 
   // If initial command passed in, execute it automatically
   useEffect(() => {
@@ -143,24 +159,23 @@ export default function ClinicalAiPanel({
   async function handleAiSubmit(promptText: string) {
     const input = promptText.trim();
     if (!input) return;
+    // One question at a time per thread, so answers stay in the order asked.
+    if (threadHasPendingTurn(threadKey)) return;
 
-    const currentReqId = ++requestIdRef.current;
-    const currentReqScope = {
-      patientId: isScheduleView ? undefined : patient.id,
-      isScheduleView,
-    };
+    // Captured at submit: the answer belongs to the thread it was asked in even
+    // if the panel has moved to another patient by the time it arrives.
+    const askedInThread = threadKey;
+    const threadPatientId = isScheduleView ? undefined : patient.id;
 
     setCustomAiText("");
-    setPlan(null);
-    setPlanError("");
-    setLayoutFeedback(null);
 
     // 1. Workspace Layout Operator (deterministic, client-side)
     if (preferences && onUpdatePreferences) {
       const prefRes = parseAiPreferenceCommand(input, preferences);
       if (prefRes.recognized && prefRes.updatedPreferences) {
         onUpdatePreferences(prefRes.updatedPreferences);
-        setLayoutFeedback(prefRes.feedback);
+        const turnId = beginClinicalAiTurn(askedInThread, input);
+        settleClinicalAiTurn(askedInThread, turnId, { status: "workspace", feedback: prefRes.feedback });
         triggerToast("Workspace layout updated.");
         return;
       }
@@ -173,57 +188,159 @@ export default function ClinicalAiPanel({
         roster.find((p) => p.id !== patient.id && lower.includes(p.name.toLowerCase().split(" ")[0])) ||
         roster.find((p) => p.id !== patient.id);
 
+      const turnId = beginClinicalAiTurn(askedInThread, input);
       if (!otherPatient) {
-        setLayoutFeedback("No second patient in your accessible roster to open beside this chart.");
+        settleClinicalAiTurn(askedInThread, turnId, {
+          status: "workspace",
+          feedback: "No second patient in your accessible roster to open beside this chart.",
+        });
         return;
       }
 
-      setLayoutFeedback(
-        `Opening ${otherPatient.name} in a detached side-by-side workspace alongside ${patient.name}.`,
-      );
+      settleClinicalAiTurn(askedInThread, turnId, {
+        status: "workspace",
+        feedback: `Opening ${otherPatient.name} in a detached side-by-side workspace alongside ${patient.name}.`,
+      });
       if (onSplitScreen) {
         onSplitScreen(otherPatient.id);
       }
       return;
     }
 
-    // 3. Clinical & Schedule Queries via Authenticated Server Planner Boundary (D-064)
-    setPlanLoading(true);
+    // 3. Clinical & Schedule Queries via Authenticated Server Planner Boundary (D-064).
+    // The thread's patient is sent as the active one, so an unqualified "her" or
+    // "that level" can only resolve to this thread's patient.
+    const turnId = beginClinicalAiTurn(askedInThread, input);
     try {
-      const activePatientId = currentReqScope.patientId;
-      const activeSurface = isScheduleView ? "general" : surfaceFromSection(section);
       const result = await requestOmniboxPlan({
         query: input,
-        activePatientId,
-        activeSurface,
+        activePatientId: threadPatientId,
+        activeSurface: isScheduleView ? "general" : surfaceFromSection(section),
       });
-
-      // Drop stale async responses if user switched patients or scope while in-flight
-      if (
-        currentReqId !== requestIdRef.current ||
-        activeScopeRef.current.isScheduleView !== currentReqScope.isScheduleView ||
-        (!currentReqScope.isScheduleView &&
-          activeScopeRef.current.patientId !== currentReqScope.patientId)
-      ) {
-        return;
-      }
-
-      setPlan(result);
+      settleClinicalAiTurn(askedInThread, turnId, { status: "answered", plan: result });
     } catch (cause: unknown) {
-      if (
-        currentReqId !== requestIdRef.current ||
-        activeScopeRef.current.isScheduleView !== currentReqScope.isScheduleView ||
-        (!currentReqScope.isScheduleView &&
-          activeScopeRef.current.patientId !== currentReqScope.patientId)
-      ) {
-        return;
-      }
-      setPlanError(omniboxPlanFailureMessage(cause));
-    } finally {
-      if (currentReqId === requestIdRef.current) {
-        setPlanLoading(false);
-      }
+      settleClinicalAiTurn(askedInThread, turnId, {
+        status: "failed",
+        error: omniboxPlanFailureMessage(cause),
+      });
     }
+  }
+
+  function toggleTurn(turnId: string) {
+    setExpandedTurnIds((current) => {
+      const next = new Set(current);
+      if (next.has(turnId)) next.delete(turnId);
+      else next.add(turnId);
+      return next;
+    });
+  }
+
+  function openWorkspaceTarget(target: OmniboxWorkspaceTarget) {
+    const destination = target.navigation;
+    if (destination.kind === "patient") {
+      void navigateToPatientLocation(
+        destination.patientId,
+        workspaceSectionForSurface(destination.section),
+        undefined,
+        destination.documentId,
+      );
+    } else if (destination.kind === "module") {
+      void navigateToLocation({ kind: "module", module: destination.module });
+    } else if (destination.kind === "communication") {
+      dispatchWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, {
+        partnerId: destination.partnerId,
+      });
+    } else {
+      dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, {
+        view:
+          destination.view === "today"
+            ? "today"
+            : destination.view === "patient"
+              ? "patients"
+              : destination.view,
+      });
+    }
+  }
+
+  function renderTurnResponse(turn: ClinicalAiTurn, isLatest: boolean) {
+    if (turn.status === "workspace") {
+      return (
+        <div
+          className="ai-turn-workspace"
+          role={isLatest ? "status" : undefined}
+        >
+          <strong><Icon name="auto_awesome" /> Workspace Operator</strong>
+          <p>{turn.feedback}</p>
+        </div>
+      );
+    }
+
+    const plan = turn.plan ?? null;
+    const otherPatient = isScheduleView ? null : turnAnswersForAnotherPatient(turn);
+    return (
+      <>
+        {otherPatient && (
+          <p className="ai-turn-other-patient" data-ai-turn-other-patient={otherPatient.id}>
+            <Icon name="swap_horiz" /> This answer is about {otherPatient.name}, not {patient.name}. The
+            conversation stays with {patient.name}.
+          </p>
+        )}
+        <OmniboxPlanCard
+          plan={plan}
+          loading={turn.status === "pending"}
+          error={turn.status === "failed" ? (turn.error ?? "The request failed.") : ""}
+          title={isScheduleView ? "Practice AI Plan" : `AI Plan · ${plan?.patient.resolved?.name ?? patient.name}`}
+          onClose={() => dismissClinicalAiTurn(threadKey, turn.id)}
+          onOpenPatient={(targetPatientId, targetSection) => {
+            if (targetPatientId === patient.id && onNavigateSection) {
+              onNavigateSection(targetSection);
+            } else {
+              void navigateToPatientLocation(targetPatientId, targetSection);
+            }
+          }}
+          onOpenTasks={() => {
+            void navigateToLocation({ kind: "module", module: "tasks" });
+          }}
+          onOpenWorkspaceTarget={openWorkspaceTarget}
+          onConfirmDefer={async (confirmation: OmniboxDeferConfirmation) => {
+            await careCompletionApi.defer({
+              patientId: confirmation.patientId,
+              itemKey: confirmation.itemKey,
+              reasonCode: confirmation.reasonCode as CareCompletionDeferralReasonCode,
+              reasonText: confirmation.reasonText,
+            });
+            announceCareCompletionChange({ patientId: confirmation.patientId });
+            triggerToast(`Deferred item for ${confirmation.patientName}.`);
+          }}
+        />
+
+        {/* Insert only an answer about this thread's patient into this patient's note. */}
+        {plan?.answer && !plan.workspaceTargets?.length && !otherPatient && !isScheduleView && onInsertToNote && (
+          <div className="ai-turn-actions">
+            <button
+              type="button"
+              id={isLatest ? "ai-insert-note-btn" : undefined}
+              className="ai-turn-insert"
+              onClick={() => {
+                onInsertToNote(plan.answer!);
+                triggerToast("Inserted clinical answer into note.");
+              }}
+            >
+              <Icon name="content_paste" /> Insert into Note
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(plan.answer!);
+                triggerToast("Copied to clipboard!");
+              }}
+            >
+              Copy
+            </button>
+          </div>
+        )}
+      </>
+    );
   }
 
   return (
@@ -406,134 +523,67 @@ export default function ClinicalAiPanel({
         </div>
       </div>
 
-      {/* Workspace Operator Layout Feedback */}
-      {layoutFeedback && (
-        <div
-          role="status"
-          style={{
-            margin: "12px 16px",
-            padding: "12px",
-            background: "#f0fdf4",
-            border: "1px solid #86efac",
-            borderRadius: "8px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-            <span style={{ color: "#16a34a" }}><Icon name="auto_awesome" /></span>
-            <strong style={{ fontSize: "12px", color: "#166534" }}>Workspace Operator</strong>
+      {/* The conversation with this patient's chart (D-132, CONV-1). Earlier
+          turns collapse to one line; the latest stays open. */}
+      {turns.length > 0 && (
+        <section className="ai-thread" aria-label={isScheduleView ? "Practice conversation" : `Conversation about ${patient.name}`}>
+          <div className="ai-thread-header">
+            <span>
+              {turns.length} {turns.length === 1 ? "question" : "questions"} · kept for this session only, not saved to the chart
+            </span>
+            <button
+              type="button"
+              className="ai-thread-clear"
+              disabled={planLoading}
+              onClick={() => {
+                clearClinicalAiThread(threadKey);
+                setExpandedTurnIds(new Set());
+              }}
+            >
+              Clear conversation
+            </button>
           </div>
-          <p style={{ margin: 0, fontSize: "12px", color: "#1e293b" }}>{layoutFeedback}</p>
-        </div>
-      )}
-
-      {/* Shared Omnibox Plan Card (D-064) */}
-      {(plan || planLoading || planError) && (
-        <div style={{ margin: "12px 16px", flexShrink: 0 }}>
-          <OmniboxPlanCard
-            plan={plan}
-            loading={planLoading}
-            error={planError}
-            title={isScheduleView ? "Practice AI Plan" : `AI Plan · ${patient.name}`}
-            onClose={() => {
-              setPlan(null);
-              setPlanError("");
-            }}
-            onOpenPatient={(targetPatientId, targetSection) => {
-              if (targetPatientId === patient.id && onNavigateSection) {
-                onNavigateSection(targetSection);
-              } else {
-                void navigateToPatientLocation(targetPatientId, targetSection);
-              }
-            }}
-            onOpenTasks={() => {
-              void navigateToLocation({ kind: "module", module: "tasks" });
-            }}
-            onOpenWorkspaceTarget={(target: OmniboxWorkspaceTarget) => {
-              const destination = target.navigation;
-              if (destination.kind === "patient") {
-                void navigateToPatientLocation(
-                  destination.patientId,
-                  workspaceSectionForSurface(destination.section),
-                  undefined,
-                  destination.documentId,
-                );
-              } else if (destination.kind === "module") {
-                void navigateToLocation({ kind: "module", module: destination.module });
-              } else if (destination.kind === "communication") {
-                dispatchWorkspaceEvent(WORKSPACE_OPEN_COMMUNICATIONS_EVENT, {
-                  partnerId: destination.partnerId,
-                });
-              } else {
-                dispatchWorkspaceEvent(WORKSPACE_SWITCH_VIEW_EVENT, {
-                  view:
-                    destination.view === "today"
-                      ? "today"
-                      : destination.view === "patient"
-                        ? "patients"
-                        : destination.view,
-                });
-              }
-              setPlan(null);
-              setPlanError("");
-            }}
-            onConfirmDefer={async (confirmation: OmniboxDeferConfirmation) => {
-              await careCompletionApi.defer({
-                patientId: confirmation.patientId,
-                itemKey: confirmation.itemKey,
-                reasonCode: confirmation.reasonCode as CareCompletionDeferralReasonCode,
-                reasonText: confirmation.reasonText,
-              });
-              announceCareCompletionChange({ patientId: confirmation.patientId });
-              triggerToast(`Deferred item for ${confirmation.patientName}.`);
-            }}
-          />
-
-          {plan?.answer && !plan.workspaceTargets?.length && !isScheduleView && onInsertToNote && (
-            <div style={{ marginTop: "8px", display: "flex", gap: "8px" }}>
-              <button
-                type="button"
-                id="ai-insert-note-btn"
-                onClick={() => {
-                  onInsertToNote(plan.answer!);
-                  triggerToast("Inserted clinical answer into note.");
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  background: "#2563eb",
-                  color: "#ffffff",
-                  border: 0,
-                  borderRadius: "6px",
-                  padding: "6px 12px",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                <Icon name="content_paste" /> Insert into Note
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void navigator.clipboard?.writeText(plan.answer!);
-                  triggerToast("Copied to clipboard!");
-                }}
-                style={{
-                  background: "#f1f5f9",
-                  color: "#334155",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "6px",
-                  padding: "6px 10px",
-                  fontSize: "11px",
-                  cursor: "pointer",
-                }}
-              >
-                Copy
-              </button>
-            </div>
-          )}
-        </div>
+          <ol className="ai-thread-turns">
+            {turns.map((turn) => {
+              const isLatest = turn.id === latestTurnId;
+              const isOpen = isLatest || expandedTurnIds.has(turn.id);
+              return (
+                <li
+                  key={turn.id}
+                  ref={isLatest ? latestTurnRef : undefined}
+                  className="ai-turn"
+                  data-ai-turn-status={turn.status}
+                  data-ai-turn-latest={isLatest ? "true" : undefined}
+                >
+                  <p className="ai-turn-question">
+                    <span className="ai-sr-label">You asked: </span>
+                    {turn.query}
+                  </p>
+                  {isOpen ? (
+                    <div className="ai-turn-response">
+                      {renderTurnResponse(turn, isLatest)}
+                      {!isLatest && (
+                        <button type="button" className="ai-turn-toggle" onClick={() => toggleTurn(turn.id)}>
+                          Collapse
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ai-turn-summary"
+                      aria-expanded="false"
+                      onClick={() => toggleTurn(turn.id)}
+                    >
+                      <span>{turnSummary(turn)}</span>
+                      <small>Show</small>
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </section>
       )}
 
       {/* Suggestion Chips */}
@@ -598,7 +648,7 @@ export default function ClinicalAiPanel({
       </div>
 
       {/* Welcoming AI empty state when no query is active */}
-      {!plan && !planLoading && !planError && !layoutFeedback && (
+      {turns.length === 0 && (
         <div
           className="ai-empty-state"
           style={{

@@ -24,6 +24,7 @@ import {
   userRoleLabel,
 } from "../../lib/auth-client";
 import { resetPatientRoster } from "../../lib/patient-roster";
+import { resetClinicalAiThreads } from "../../lib/clinical-ai-thread";
 import { setActiveCacheUserId } from "../../lib/local-cache-scope";
 import {
   clearAuthenticationChallenge,
@@ -247,6 +248,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     // remounts the workspace so no patient charts bleed over.
     sessionChecks.invalidate();
     resetPatientRoster();
+    resetClinicalAiThreads();
     setMismatch(null);
     setExpired(false);
     setPassword("");
@@ -274,6 +276,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
     setSession(null);
     setActiveCacheUserId(null);
     resetPatientRoster();
+    resetClinicalAiThreads();
     try {
       await logoutCurrentUser();
     } finally {
@@ -298,6 +301,7 @@ export default function AuthSessionGate({ children }: { children: ReactNode }) {
           // it here means the next sign-in loads its own rather than briefly showing
           // the previous clinician's patients.
           resetPatientRoster();
+          resetClinicalAiThreads();
           setActiveCacheUserId(null);
           setExpired(false);
           setSession(null);

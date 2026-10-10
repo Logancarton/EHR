@@ -163,6 +163,16 @@ The 2026-09-20 owner direction keeps the main canvas free of a permanent left ap
 - **RIGHT-06:** The canonical companion lifecycle is minimized/icon -> docked right panel -> expanded main canvas -> redocked -> minimized. Expansion is a presentation change, not a new instance of the tool; patient/recipient binding, selected item/channel, filters, draft state, scroll, and the underlying workspace location survive the transition.
 - **RIGHT-07:** Staff/HR currently uses the companion/canvas lifecycle and may continue to do so even though D-106 makes HR a first-class product domain. Product-domain status does not require permanent chrome. Communication and other contextual tools continue to use the same expand/redock lifecycle.
 
+### CONV — Continuous conversation with the assistant (D-132)
+
+- **CONV-01:** Each patient has one continuous conversation with the assistant. Questions and answers stay in order; earlier turns collapse and reopen; the clinician can clear it. It is a session working view, never the patient record.
+- **CONV-02:** Every sentence has one addressee, set by the clinician: to the patient (transcribed into the note, never a command) or to the assistant (typed, push-to-talk, or "Bond, …"; acted on, kept out of the note). No model guesses the addressee.
+- **CONV-03:** Output is Show, Go, Prepare or Real. Show (with its source) and Go happen automatically; Prepare stages a proposal; Real (send, place, sign) happens only on a clinician's click through `ClinicalActionGateway`.
+- **CONV-04:** Approval is a click, never a spoken word.
+- **CONV-05:** One tray holds every proposal, whether asked for or heard by the scribe. A heard proposal shows the sentence it came from and is never pre-approved.
+- **CONV-06:** Unqualified follow-ups ("her", "that level") resolve only to the thread's patient. Naming another patient goes through the name and date-of-birth check and is shown as a visible switch; an answer about another patient is labelled and cannot be inserted into this patient's note. During a live visit, opening another chart needs typed or clicked intent.
+- **CONV-07:** Voice capture states its engine. Browser speech recognition that leaves the device is limited to synthetic data; production requires a BAA-covered or local engine and recorded consent.
+
 ### LAYOUT — Clinician control
 
 - **LAYOUT-01:** Support Comfortable, Compact, Minimal/Zen, and a higher-density cockpit when appropriate.

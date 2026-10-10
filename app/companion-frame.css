@@ -311,6 +311,176 @@ html[data-companion-layout="single"][data-companion-open="true"] .rail-resize-ri
   cursor: default;
 }
 
+/* Conversation thread (D-132, CONV-1): questions on the right, answers below. */
+.ai-thread {
+  margin: 12px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 8px;
+}
+
+.ai-thread-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--m3-text-secondary);
+}
+
+.ai-thread-header button,
+.ai-turn-toggle {
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--m3-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ai-thread-header button:disabled {
+  color: var(--m3-text-tertiary);
+  cursor: default;
+}
+
+.ai-thread-turns {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 12px;
+}
+
+.ai-turn {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 6px;
+}
+
+.ai-turn-question {
+  justify-self: end;
+  max-width: 85%;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 12px 12px 2px 12px;
+  background: var(--m3-primary-container);
+  color: var(--m3-on-primary-container);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.ai-sr-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ai-turn-response {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 6px;
+}
+
+.ai-turn-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 8px;
+  background: var(--m3-surface-container);
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-turn-summary span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-turn-summary small {
+  color: var(--m3-primary);
+  font-size: 12px;
+}
+
+.ai-turn-workspace {
+  padding: 8px 10px;
+  border: 1px solid var(--m3-success-container);
+  border-radius: 8px;
+  background: var(--m3-surface-container);
+  font-size: 13px;
+}
+
+.ai-turn-workspace strong {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--m3-success);
+}
+
+.ai-turn-workspace p {
+  margin: 4px 0 0;
+  color: var(--m3-text-primary);
+}
+
+.ai-turn-other-patient {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--m3-danger-container);
+  color: var(--m3-on-danger-container);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ai-turn-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-turn-actions button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--m3-outline-variant);
+  border-radius: 6px;
+  background: var(--m3-surface-container);
+  color: var(--m3-text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ai-turn-actions .ai-turn-insert {
+  border-color: var(--m3-primary);
+  background: var(--m3-primary);
+  color: var(--m3-on-primary);
+  font-weight: 600;
+}
+
 /* ── Scratchpad ──────────────────────────────────────────────────────────── */
 
 .scratchpad-composer-row {
@@ -1305,3 +1475,9 @@ html[data-companion-layout="single"][data-companion-open="true"] .global-module-
 /* Unconnected-transport notice: always present, one quiet line rather than a banner. */
 .comm-transport-note { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 8px; font-size: 12.5px; line-height: 1.4; color: var(--m3-text-secondary); }
 .comm-transport-note .icon { margin-top: 1px; color: var(--m3-text-tertiary); }
+
+/* Long source references wrap inside the narrow conversation column. */
+.ai-thread .omnibox-plan-evidence span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

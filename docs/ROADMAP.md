@@ -17,6 +17,8 @@ Only move work that is verified complete under the *Shared completion and visual
 
 ## Next up
 
+Owner direction, 2026-10-09: continue the AI conversation work ([D-132](decisions/D-132.md)) first. Take the first unfinished slice under *CONV — continuous conversation* below, finish and verify it, record it, then take the next. When CONV-5 is complete, return to the 2026-10-06 list. CONV-6 waits for funding (D-107).
+
 Owner override, 2026-10-06: work through the readiness review points in this order. Confirmed repairs ship in bounded passes; uncertain choices stay recorded and do not stop independent work.
 
 1. **Reliability:** resolve the remaining browser failures, isolate synthetic browser state, and verify full CI plus the P12 clinic-day path. SHELL-OWN-1 acceptance remains part of this gate. Focused passing cases do not close it.
@@ -42,6 +44,17 @@ Acceptance is incomplete. An unchanged snapshot of the starting SHA reproduced A
 Local verification: `npm run check` passed (lint/typecheck and 581 unit/service tests); `npm run build` passed. Fifty distinct affected browser scenarios passed across focused runs of shell ownership, Communication, lifecycle, patient-record companions, Team retirement, launcher, prototype containment, draft target, module tabs and all-tool expand/redock. Two old test preconditions were corrected without removing behavioral assertions: search the full roster instead of assuming an unopened patient is in the five recent rows, and explicitly enter Patient scope instead of expecting chart navigation to override restored Team scope. No narrow-width overflow assertion was weakened. A broader affected run still failed the two baseline resize cases. The complete browser gate has not passed. Published CI is a separate authority and must be checked before closure.
 
 Settled synthetic patient/Communication visual evidence was inspected at [1440×900](../output/playwright/d117-shell-1440-1x.png), [1280×800](../output/playwright/d117-shell-1280-1x.png), [1024px](../output/playwright/d117-shell-1024-1x.png) and [200% zoom](../output/playwright/d117-shell-1440-2x.png). Narrow/zoomed presentations use scroll and panel dismissal; no blanket font reduction or shell redesign was introduced.
+
+### CONV — continuous conversation (D-132), in order
+
+Requirements CONV-01 to CONV-07 in [PRODUCT_VISION.md](PRODUCT_VISION.md#conv--continuous-conversation-with-the-assistant-d-132). CONV-1 (the per-patient thread) is complete; see ROADMAP_COMPLETED. Rules for every slice: one planner (`app/server/ai/omnibox-planner.ts`), one approval path (`ClinicalActionGateway`), nothing Real without a click, no paid services, the thread is never written to the record. Each slice ships with unit tests for its safety rule and a browser test that drives the real control.
+
+1. **CONV-1b — planner conversation memory and the named-patient check.** Send the planner a bounded summary of the thread's earlier turns (questions plus the structured result kinds, not raw model text) so elliptical follow-ups ("and the one before that?") resolve; the server re-validates everything against authoritative records. Restore the first-name lookup with a full name and date-of-birth check before a named patient is used: a first name alone may suggest candidates but never resolves. This re-does the lost `omni-patient-dob-1` work. Done when: a follow-up that names nobody stays with the thread's patient, a first-name-only mention returns a clarification listing candidates with DOB, and a full name plus DOB resolves.
+2. **CONV-2 — one proposal tray, click-only approval.** Collect planner proposals from every turn of the thread into one tray in the Clinical AI companion, each with its source turn and patient. Approval opens the owning workflow or confirms through the existing gateway path; nothing approves by text or voice. Done when: proposals from several turns appear once each, survive panel close/reopen and chart switches, and a proposal for another patient cannot be approved from this thread.
+3. **CONV-3 — addressing by voice.** Push-to-talk and a "Bond, …" prefix mark a sentence as addressed to the assistant; everything else is to the patient. Add the in-room guard (another chart only by typing or click while a visit is live) and record consent before capture. State the speech engine on screen (CONV-07). Done when: un-prefixed speech never reaches the planner, and "yes"/"approve" spoken aloud approves nothing.
+4. **CONV-4 — spoken note instructions.** Sentences addressed to the assistant that instruct the note ("Bond, put the lithium plan in the assessment") become LIVE-capture guidance (D-115), shown for review, never written silently.
+5. **CONV-5 — two-pass drafting and an evaluation set.** Draft, then check the draft against the transcript and record. Add ten role-played synthetic visits and measure omissions and unsupported statements per note. Report the numbers; do not tune to the set.
+6. **CONV-6 — hosted semantic scribing / paid models.** Blocked on funding and a BAA-covered speech engine (D-107, CONV-07). Build only to the adapter boundary until then.
 
 ## Current milestone — funding prototype (D-107)
 
@@ -99,6 +112,8 @@ This is the only ordered delivery queue. The owner can explicitly override scope
 CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified complete. The owner-directed shell migration ran UI-1 through UI-8 in order and **all eight are done**. CB-6, the companion lifecycle gate, is verified complete (2026-09-27). CB-7, the manual encounter loop and recovery matrix gate, is verified complete (2026-09-27). P6, operational queue resolution and truthful message composer/triage, is verified complete (2026-09-27). Remaining P7 work may proceed toward the D-107 prototype without bypassing the production/PHI gates.
 
 ## Open defects and follow-ups
+
+- **Lost uncommitted AI work (found 2026-10-09):** another agent session drafted D-132 and a first-name patient lookup with a name/DOB check as `d-132-continuous-conversation.patch` and `omni-patient-dob-1.patch`. Neither reached `main` and neither file is on the development Mac. D-132 was rewritten from the owner's pasted summary; the lookup is re-queued as CONV-1b. If the patches turn up, compare them with D-132 and CONV-1b rather than applying them blind.
 
 - **Omnibox patient result not clickable at narrow widths (found 2026-10-08):** `companion-overflow-fit` "Open workspace and patient overflow stay reachable with six patient tabs" fails at 1024×800 (timeout: the second patient's search result reports "not visible" then detaches) and at 720×450, and passes at 1440 and 1280. It fails the same way on `2e45518` without the D-131 record-tool changes, so the cause predates them. Not yet diagnosed.
 
