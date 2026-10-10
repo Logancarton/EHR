@@ -169,7 +169,15 @@ export default function WorkspaceTopBar({
           aria-label="Ask AI or search the EHR"
           value={query}
           onFocus={() => setSearchFocused(true)}
-          onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
+          onBlur={(event) => {
+            // The delay lets a click on a suggestion land before the list closes.
+            // Close only if focus is still elsewhere: Ctrl+K or a click back into
+            // the box within the delay must not have its panel shut underneath it.
+            const input = event.currentTarget;
+            window.setTimeout(() => {
+              if (document.activeElement !== input) setSearchFocused(false);
+            }, 120);
+          }}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {

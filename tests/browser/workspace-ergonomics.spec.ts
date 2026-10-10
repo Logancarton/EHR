@@ -125,6 +125,12 @@ test.describe("workspace safety and browser ergonomics", () => {
     const input = page.getByLabel("Ask AI or search the EHR");
     await page.keyboard.press("Control+K");
     await expect(input).toBeFocused();
+    // Ctrl+K opens the search with its suggestions, which drop over the tab strip
+    // like any dropdown. Escape closes them and leaves the tabs reachable.
+    const starters = page.locator(".command-starters");
+    await expect(starters).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(starters).toHaveCount(0);
 
     const beforeClose = await patientTabs.count();
     const visiblePatient = page.locator('.browser-tab[data-workspace-tab="patient"]:visible').last();

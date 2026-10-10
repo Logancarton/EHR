@@ -8,6 +8,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### RELIABILITY-OMNIBOX-1 — search panel no longer closes under the clinician; full-run failures triaged (2026-10-09)
+
+- **Starting SHA:** a272f2b.
+- **Full isolated browser run:** 72 of 77 files passed. Failing: `companion-overflow-fit` (six-tab search at 1024 and 720 px, open since 2026-10-08), `patient-administration` ×5, `session-expiry` ×2, `synthetic-visit` ×1, `workspace-ergonomics` ×1.
+- **Cause found:** the search box's blur handler closed its panel 120 ms after any blur, even if focus had returned by then. Opening a chart from search blurs the box. Typing the next name, or pressing Ctrl+K, within that window had its panel shut while the box was focused: results "not visible, then detached" in `companion-overflow-fit`. `workspace-ergonomics` passed only when the late close happened to hide the suggestion panel before the test clicked a tab, and failed when it did not. Confirmed with temporary focus/close instrumentation, since removed. Fix: the delayed close now runs only if focus is still outside the box (`WorkspaceTopBar`).
+- **Test updates:** `workspace-ergonomics` now asserts that Ctrl+K shows the suggestions and that Escape closes them before it clicks a tab. Its shortcut assertions are unchanged. `patient-administration` selected the Patient info section "Identity", which 987bf29 (2026-10-08) deliberately renamed "Profile". The selector now follows the rename, and every Identity-form assertion is unchanged.
+- **Validation:** `npm run check` 685/685 (0 lint errors); `npm run build` passed; browser companion-overflow-fit 18/18 (twice), workspace-ergonomics 5/5 (twice), patient-administration 9/9, dismissal 7/7, home-assistant 7/7, omnibox-focus-fit 4/4, omnibox-ambient-preview 1/1, voice-menu 4/4. `session-expiry` 5/5 and `synthetic-visit` 2/2 passed unchanged on rerun; they are recorded as intermittent in ROADMAP.
+- **Named gaps:** a new full run and published CI have not yet confirmed the suite green end to end.
+
 ### CONV-1b — conversation memory and the named-patient check (owner direction 2026-10-09, D-132)
 
 - **Starting SHA:** a67eb9e.
