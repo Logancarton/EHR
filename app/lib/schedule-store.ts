@@ -125,6 +125,20 @@ export function loadPracticeSchedule({ force = false }: { force?: boolean } = {}
       const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
       const syncStatus: SyncStatus = isOffline ? "offline" : "error";
 
+      // A failed refresh of a day already on screen keeps that day, labelled as not
+      // refreshed ("Sync failed" / "Offline" with its last confirmed time), rather
+      // than blanking the front desk's schedule over one refused poll or a network
+      // blip. A load that never succeeded is still an explicit, empty failure.
+      if (state.status === "ready") {
+        publish({
+          ...state,
+          syncStatus,
+          error: cause instanceof Error ? cause.message : "The schedule could not be refreshed.",
+          sequenceId: requestSeq,
+        });
+        return state.appointments;
+      }
+
       publish({
         appointments: EMPTY_SCHEDULE,
         status: "error",

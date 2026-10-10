@@ -11,6 +11,7 @@
     "test": "tsx --test tests/*.test.ts",
     "test:browser": "tsx scripts/run-browser-tests.ts",
     "test:browser:headed": "tsx scripts/run-browser-tests.ts --headed",
+    "test:browser:chunks": "tsx scripts/run-browser-chunks.ts",
     "check": "npm run lint && npm run typecheck && npm test",
     "check:full": "npm run check && npm run build && npx playwright install --with-deps chromium && npm run test:browser",
     "handoff": "tsx scripts/handoff.ts"

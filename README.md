@@ -60,7 +60,11 @@ On an existing Windows installation, the Clinical Bond desktop launcher builds o
 npm run check        # lint, typecheck, and Node/integration tests
 npm run build        # production build
 npm run test:browser # Playwright; install Chromium if needed
+npm run test:browser:chunks              # the full browser gate, in 5 chunks
+npm run test:browser:chunks -- --only=2  # one chunk (about 15 files) for a quick pass
 ```
+
+The full browser gate runs locally with `npm run test:browser:chunks`. Each chunk goes through the same isolated runner as `test:browser`: every spec file gets a fresh synthetic database and its own server. A failing chunk names its failing files, so it can be rerun on its own.
 
 `npm run check:full` runs the complete sequence including browser installation. Runtime changes require the repository gates plus focused workflow verification. Documentation-only changes require link/anchor checks, a complete diff review, `git diff --check`, and inspection of available CI; do not run expensive application tests solely for Markdown edits. A known failing baseline is a tracked defect, not permission to weaken tests or call the build green.
 

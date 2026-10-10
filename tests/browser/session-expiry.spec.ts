@@ -35,9 +35,37 @@ async function expireSession(page: Page) {
   ]);
 }
 
+/**
+ * Clicks a roster status as the session ends, so that click's write is the first
+ * refused request.
+ *
+ * Expiring first and clicking afterwards left a window in which a background poll
+ * met the expired cookie, raised the challenge and made the workspace inert before
+ * the click could land. The challenge was right; the case under test simply never
+ * ran. Here the cookie is replaced at the moment the write is sent, and the write
+ * itself carries the expired cookie, so the scenario is the same one, deterministically.
+ */
+async function clickRosterStatusAsSessionExpires(page: Page) {
+  let expired = false;
+  await page.route("**/api/appointments", async (route) => {
+    const request = route.request();
+    if (expired || request.method() === "GET") return route.continue();
+    expired = true;
+    await expireSession(page);
+    await route.continue({
+      headers: { ...request.headers(), cookie: "ehr_session=expired.invalid-signature" },
+    });
+  });
+  await page.locator(".roster-row .frontdesk-btn").first().click();
+}
+
 test.describe("an expired session", () => {
   test.beforeEach(async ({ page }) => {
     await signInWithDefaultLayout(page, "Prototype provider");
+    // The roster is the control both cases drive. Expiring the session before it
+    // has loaded makes the roster's own request the refused one, so the challenge
+    // appears with no row to click and the case under test never runs.
+    await expect(page.locator(".roster-row .frontdesk-btn").first()).toBeVisible({ timeout: 15_000 });
   });
 
   test("challenges over the workspace instead of unmounting it", async ({ page }) => {
@@ -49,8 +77,7 @@ test.describe("an expired session", () => {
     // case with the most at stake, so that is the one driven here. It has to be the
     // workspace's own request — a raw `fetch` from the test bypasses the client
     // that reports the refusal, which is the mechanism under test.
-    await expireSession(page);
-    await page.locator(".roster-row .frontdesk-btn").first().click();
+    await clickRosterStatusAsSessionExpires(page);
 
     const challenge = page.locator(".auth-challenge");
     await expect(challenge).toBeVisible({ timeout: 10_000 });
@@ -72,8 +99,7 @@ test.describe("an expired session", () => {
   test("signing back in clears the challenge and leaves the workspace where it was", async ({ page }) => {
     await expect(page.locator(".today-dashboard")).toBeVisible();
 
-    await expireSession(page);
-    await page.locator(".roster-row .frontdesk-btn").first().click();
+    await clickRosterStatusAsSessionExpires(page);
     await expect(page.locator(".auth-challenge")).toBeVisible({ timeout: 10_000 });
 
     await page
@@ -117,8 +143,7 @@ test.describe("an expired session", () => {
 
     // One click refuses several things at once: the appointment write and the
     // workspace autosave that follows it are separate requests to separate routes.
-    await expireSession(page);
-    await page.locator(".roster-row .frontdesk-btn").first().click();
+    await clickRosterStatusAsSessionExpires(page);
 
     await expect(page.locator(".auth-challenge")).toBeVisible({ timeout: 10_000 });
 
@@ -173,8 +198,7 @@ test.describe("an expired session", () => {
   test("explicit switch account discards the workspace safely and returns to sign-in", async ({ page }) => {
     await expect(page.locator(".today-dashboard")).toBeVisible();
 
-    await expireSession(page);
-    await page.locator(".roster-row .frontdesk-btn").first().click();
+    await clickRosterStatusAsSessionExpires(page);
     await expect(page.locator(".auth-challenge")).toBeVisible({ timeout: 10_000 });
 
     await page

@@ -8,6 +8,15 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### RELIABILITY-SCHEDULE-1 — a failed schedule refresh keeps the day on screen; chunked browser gate (2026-10-10)
+
+- **Starting SHA:** 4acc1d3.
+- **Chunked gate:** `npm run test:browser:chunks` (`scripts/run-browser-chunks.ts`) runs every browser spec in five round-robin chunks through the standard isolated runner. `--only=N` runs one chunk and `--chunks=N` changes the split. The README and the shared completion rules now name it as the local full gate.
+- **Defect found by a small chunk:** `session-expiry` failed intermittently. A background schedule poll that failed (here, refused by the expired session) replaced the day already on screen with an error and an empty list. Any failed poll, such as a network blip, blanked the front desk's schedule. `schedule-store` now keeps the confirmed day when a refresh fails, with `syncStatus` "error"/"offline", the failure message, and the last confirmed `loadedAt`. The existing sync badge shows "Sync failed" with retry, or "Offline". A first load that fails is still an explicit, empty failure, and that test is unchanged.
+- **Test precondition:** the spec expired the session and then clicked a roster status, and a background poll could meet the expiry first. The challenge then made the workspace inert before the click landed. The spec now waits for the roster, and the three click cases expire the session as their write is sent (`clickRosterStatusAsSessionExpires`). The scenario and every assertion are unchanged.
+- **Validation:** `npm run check` 686/686 (new `schedule-runtime` case: a failed refresh keeps rows, is marked not live, keeps the last confirmed time, and the next success clears the error); `npm run build` passed; `session-expiry` 6/6 consecutive isolated runs (it had failed in 1 of 4 and then 1 of 5); calendar-companion-panel, calendar-event-lifecycle, calendar-interval-jump, calendar-view-options, dashboard-preview (including "a failed schedule load never looks like an empty day"), patient-roster, roster-row-hover, synthetic-visit and workspace-reliability all passed (9/9 files).
+- **Named gaps:** the published CI browser failure is still unread (see ROADMAP). Other surfaces with their own pollers were not audited for the same blank-on-failed-refresh behavior.
+
 ### RELIABILITY-PREFS-1 — a late startup layout load no longer undoes the clinician's change; full suite green in chunks (2026-10-10)
 
 - **Starting SHA:** f6d5189.

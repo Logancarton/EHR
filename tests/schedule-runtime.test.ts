@@ -130,6 +130,45 @@ test("a failed load is an explicit failure with nothing in it, never seeded appo
   }
 });
 
+test("a failed refresh keeps the confirmed day on screen and says it is not current", async () => {
+  const store: StoreModule = await import("../app/lib/schedule-store");
+
+  const populated = stubAppointmentFetch(APPOINTMENTS);
+  let confirmedAt: string | null = null;
+  try {
+    store.resetPracticeSchedule();
+    await store.loadPracticeSchedule();
+    confirmedAt = store.practiceScheduleState().loadedAt;
+    assert.ok(confirmedAt);
+  } finally {
+    populated.restore();
+  }
+
+  const refused = stubAppointmentFetch([], { failWith: "Authentication required" });
+  try {
+    const kept = await store.refreshPracticeSchedule();
+    const state = store.practiceScheduleState();
+    assert.deepEqual(kept.map((item) => item.id), ["apt-1"], "one failed poll does not blank the day");
+    assert.equal(state.status, "ready");
+    assert.notEqual(state.syncStatus, "live", "the day is marked as not refreshed");
+    assert.match(state.error, /Authentication required/);
+    assert.equal(state.loadedAt, confirmedAt, "freshness stays at the last confirmed load, not the failure");
+  } finally {
+    refused.restore();
+  }
+
+  // The next successful refresh clears the failure.
+  const recovered = stubAppointmentFetch([]);
+  try {
+    await store.refreshPracticeSchedule();
+    assert.equal(store.practiceScheduleState().error, "");
+    assert.deepEqual(store.practiceScheduleState().appointments, []);
+  } finally {
+    recovered.restore();
+    store.resetPracticeSchedule();
+  }
+});
+
 test("concurrent callers share one request and a later response cannot revive a reset store", async () => {
   const store: StoreModule = await import("../app/lib/schedule-store");
   const stub = stubAppointmentFetch(APPOINTMENTS);
