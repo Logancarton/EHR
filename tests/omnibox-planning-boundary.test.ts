@@ -138,7 +138,25 @@ test("omnibox planning is authenticated, patient-bound, permission-aware, valida
     assert.equal(providerOrder.body.plan?.context?.surface, "order-cart");
     assert.deepEqual(clinicalCounts(), beforePlanning, "planning an order must not create an order or change clinical state");
 
-    const crossPatient = await planRequest(providerCookie, "Order a lithium level for Jordan", "maya-chen");
+    // D-132: from inside Maya's chart a first name alone does not switch patients.
+    // It is offered back with date of birth and nothing is proposed.
+    const partialName = await planRequest(providerCookie, "Order a lithium level for Jordan", "maya-chen");
+    assert.equal(partialName.response.status, 200);
+    assert.equal(partialName.body.plan?.patient.resolved, undefined, "a first name must not switch away from the active patient");
+    assert.equal(partialName.body.plan?.patient.resolution, "ambiguous");
+    assert.equal(partialName.body.plan?.proposals.length, 0);
+    assert.equal(partialName.body.plan?.clarification?.reason, "patient_full_name_required");
+    assert.equal(partialName.body.plan?.clarification?.candidates?.[0]?.id, "jordan-reed");
+    assert.ok(partialName.body.plan?.clarification?.candidates?.[0]?.dob, "the candidate is shown with date of birth");
+    assert.match(partialName.body.plan?.clarification?.message ?? "", /Maya Chen remains the patient/);
+
+    // A first name that belongs to the active patient needs no switch.
+    const ownFirstName = await planRequest(providerCookie, "Order a lithium level for Maya", "maya-chen");
+    assert.equal(ownFirstName.body.plan?.patient.resolved?.id, "maya-chen");
+    assert.equal(ownFirstName.body.plan?.patient.switchRequired, false);
+
+    // The full name switches, visibly, and the proposal stays blocked until the chart is confirmed.
+    const crossPatient = await planRequest(providerCookie, "Order a lithium level for Jordan Reed", "maya-chen");
     assert.equal(crossPatient.response.status, 200);
     assert.equal(crossPatient.body.plan?.patient.active?.id, "maya-chen");
     assert.equal(crossPatient.body.plan?.patient.resolved?.id, "jordan-reed");

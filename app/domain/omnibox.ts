@@ -114,6 +114,8 @@ export type OmniboxPlanningModelOutput = {
 export type OmniboxPatientIdentity = {
   id: string;
   name: string;
+  /** Shown beside the name wherever the clinician must tell two patients apart. */
+  dob?: string;
 };
 
 export type OmniboxPatientState = {
@@ -347,6 +349,7 @@ export type OmniboxClarification = {
     | "patient_required"
     | "patient_not_found"
     | "patient_ambiguous"
+    | "patient_full_name_required"
     | "medication_required"
     | "request_ambiguous"
     | "work_item_not_found"
@@ -376,6 +379,13 @@ export type OmniboxPlan = {
     model: string;
   };
   patient: OmniboxPatientState;
+  /** Set when this request was read as a follow-up to an earlier question (D-132). */
+  followUp?: {
+    kind: "another_patient" | "earlier_result";
+    /** The earlier question, in the clinician's own words. */
+    basedOn: string;
+    resultOffset: number;
+  };
   answer?: string;
   evidence: OmniboxEvidenceReference[];
   /** Structured, source-backed longitudinal reasoning; never authoritative chart truth. */

@@ -7,6 +7,7 @@ import {
   clearClinicalAiThread,
   clinicalAiThreadFor,
   dismissClinicalAiTurn,
+  priorQuestionsFor,
   resetClinicalAiThreads,
   settleClinicalAiTurn,
   subscribeClinicalAiThreads,
@@ -163,4 +164,26 @@ test("collapsed turns summarize what came back without inventing content", () =>
   assert.equal(turnSummary(turns[0]), "Sertraline 100 mg daily");
   assert.equal(turnSummary(turns[1]), "Switched to compact density.");
   assert.equal(turnSummary(turns[2]), "The assistant could not answer this.");
+});
+
+test("follow-ups are read only against answered questions about this thread's patient", () => {
+  const maya = { id: "maya-chen", name: "Maya Chen" };
+  const settle = (query: string, outcome: Parameters<typeof settleClinicalAiTurn>[2]) =>
+    settleClinicalAiTurn("maya-chen", beginClinicalAiTurn("maya-chen", query), outcome);
+
+  settle("What was her last lithium level?", { status: "answered", plan: plan(maya) });
+  settle("compact mode", { status: "workspace", feedback: "Compact." });
+  settle("What is David Kim taking?", { status: "answered", plan: plan({ id: "david-kim", name: "David Kim", source: "mentioned_patient" }) });
+  settle("Check labs", { status: "failed", error: "Planner unavailable" });
+  const clarified = plan(maya);
+  clarified.clarification = { required: true, field: "request", reason: "request_ambiguous", message: "Which one?" };
+  settle("that one", { status: "answered", plan: clarified });
+  beginClinicalAiTurn("maya-chen", "still pending");
+  settle("Summarize chart", { status: "answered", plan: plan(maya) });
+
+  assert.deepEqual(priorQuestionsFor(clinicalAiThreadFor("maya-chen"), 6), [
+    "What was her last lithium level?",
+    "Summarize chart",
+  ]);
+  assert.deepEqual(priorQuestionsFor(clinicalAiThreadFor("maya-chen"), 1), ["Summarize chart"]);
 });

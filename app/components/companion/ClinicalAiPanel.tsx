@@ -34,6 +34,7 @@ import {
   clearClinicalAiThread,
   clinicalAiThreadFor,
   dismissClinicalAiTurn,
+  priorQuestionsFor,
   settleClinicalAiTurn,
   subscribeClinicalAiThreads,
   threadHasPendingTurn,
@@ -43,6 +44,8 @@ import {
 
 /** Thread key for the practice schedule view, which has no patient. */
 const PRACTICE_THREAD_KEY = "practice";
+/** Matches the server's MAX_PRIOR_QUESTIONS; the route rejects more. */
+const PRIOR_QUESTION_LIMIT = 6;
 
 function surfaceFromSection(section: Section | undefined): OmniboxSurface {
   switch (section) {
@@ -210,12 +213,14 @@ export default function ClinicalAiPanel({
     // 3. Clinical & Schedule Queries via Authenticated Server Planner Boundary (D-064).
     // The thread's patient is sent as the active one, so an unqualified "her" or
     // "that level" can only resolve to this thread's patient.
+    const priorQuestions = priorQuestionsFor(clinicalAiThreadFor(askedInThread), PRIOR_QUESTION_LIMIT);
     const turnId = beginClinicalAiTurn(askedInThread, input);
     try {
       const result = await requestOmniboxPlan({
         query: input,
         activePatientId: threadPatientId,
         activeSurface: isScheduleView ? "general" : surfaceFromSection(section),
+        priorQuestions,
       });
       settleClinicalAiTurn(askedInThread, turnId, { status: "answered", plan: result });
     } catch (cause: unknown) {

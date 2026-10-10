@@ -284,6 +284,19 @@ test("DB-10: a spoken deferral becomes a proposal, never a mutation", async () =
       (ambiguousPatient.clarification?.candidates?.length ?? 0) > 1,
       "the clinician is asked which patient was meant",
     );
+    assert.ok(
+      ambiguousPatient.clarification?.candidates?.every((candidate) => Boolean(candidate.dob)),
+      "each candidate carries a date of birth to tell them apart (D-132)",
+    );
+
+    // A date of birth in the request picks the one patient it belongs to, in either written form.
+    for (const dob of ["1992-02-02", "02/02/1992"]) {
+      const byDob = await planner.plan(
+        { query: `Defer Smith's follow-up appointment until next week, DOB ${dob}` },
+        actor,
+      );
+      assert.equal(byDob.patient.resolved?.id, "p-cc-smith-2", `DOB ${dob} narrows Smith to Jordan Smith`);
+    }
 
     // ---------------------------------------------------------------------
     // 7. An unavailable item is not offered for deferral by voice either

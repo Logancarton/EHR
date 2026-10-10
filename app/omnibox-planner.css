@@ -447,3 +447,12 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+
+/* D-132: says which earlier question a follow-up was read against. */
+.omnibox-plan-follow-up {
+  margin: 0;
+  color: var(--m3-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}

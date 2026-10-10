@@ -8,6 +8,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### CONV-1b — conversation memory and the named-patient check (owner direction 2026-10-09, D-132)
+
+- **Starting SHA:** a67eb9e.
+- **Change:** the Clinical AI panel sends up to six earlier questions (`priorQuestionsFor`): the clinician's words only, from turns answered about the thread's patient. The route validates them (array of at most 6 strings, each up to 4000 characters). `app/server/ai/conversation-follow-up.ts` reads two follow-ups: "what about <patient>?" repeats the last question for that patient, and "the one before that" steps back through the last lab question's results. The planner re-answers from records, reports `followUp`, and the plan card shows "Read as: …". With a chart active, a partial name that points to another patient asks for the full name, quoting the typed word and showing the match's DOB, and answers nothing. A matching DOB in either stored form identifies one patient. Candidates carry DOB. Requirements CONV-01, CONV-06.
+- **Changed assertion:** `omnibox-planning-boundary` used "Order a lithium level for Jordan" from Maya's chart to show a visible, blocked switch. That sentence now asks for the full name (asserted), and the same switch-and-block assertions moved unchanged to "…for Jordan Reed". This was an intended D-132 behavior change, not a weakening.
+- **Validation:** `npm run check` 685/685 (0 lint errors; new `tests/conversation-follow-up.test.ts` 5/5 covers the reader, lab step-back to exhaustion, another-patient follow-up, first-name refusal, surname ambiguity with DOBs, DOB identification in both forms, and a wrong DOB; `clinical-ai-thread` 11/11; `care-completion-voice-defer` adds DOB checks); `npm run build` passed. Browser: companion-ai 2/2 (asserts the request carries `priorQuestions` and the thread patient, the "What about David?" refusal with DOB, and the "What about David Kim?" recap with its "Read as" line), plus home-assistant 7/7, omnibox-ambient-preview 1/1, omnibox-workspace-object-navigation 1/1, review-2026-10-06 4/4, review-improvements 5/5, voice-menu 4/4 and workspace-ergonomics 5/5. The first browser run caught two defects, both fixed before this entry: synthetic DOBs stored as `MM/DD/YYYY` never matched, and the refusal quoted the full name instead of the typed word. Screenshot inspected at 1280×720 (`output/playwright/conv-1-thread.png`).
+- **Named gaps:** step-back covers lab results only, within the bounded recent-lab context (10 per request). The follow-up reader recognizes fixed English phrasings, not paraphrases. The full-name rule also applies in the omnibox, where it was not separately browser-tested beyond the specs listed.
+
 ### CONV-1 — one conversation thread per patient in Clinical AI (owner direction 2026-10-09, D-132)
 
 - **Starting SHA:** b3ad7d2.

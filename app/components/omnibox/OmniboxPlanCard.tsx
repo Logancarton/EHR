@@ -167,6 +167,14 @@ export default function OmniboxPlanCard({
       {plan ? (
         <div className="omnibox-plan-body">
 
+          {plan.followUp ? (
+            <p className="omnibox-plan-follow-up" data-omnibox-plan-follow-up={plan.followUp.kind}>
+              {plan.followUp.kind === "earlier_result"
+                ? `Read as: an earlier result for “${plan.followUp.basedOn}”`
+                : `Read as: “${plan.followUp.basedOn}”, asked about the patient named`}
+            </p>
+          ) : null}
+
           {plan.patient.resolved ? (
             <div className="omnibox-plan-patient">
               <strong>Patient: {plan.patient.resolved.name}</strong>
@@ -190,7 +198,10 @@ export default function OmniboxPlanCard({
               <p>{plan.clarification.message}</p>
               {plan.clarification.candidates?.length ? (
                 <small>
-                  Possible matches: {plan.clarification.candidates.map((candidate) => candidate.name).join(", ")}
+                  Possible matches:{" "}
+                  {plan.clarification.candidates
+                    .map((candidate) => (candidate.dob ? `${candidate.name} (DOB ${candidate.dob})` : candidate.name))
+                    .join(", ")}
                 </small>
               ) : null}
               {plan.clarification.workItemCandidates?.length ? (

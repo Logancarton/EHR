@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { OmniboxSurface } from "../../../../domain/omnibox";
 import { omniboxPlannerService } from "../../../../server/ai/omnibox-planner";
+import { MAX_PRIOR_QUESTIONS } from "../../../../server/ai/conversation-follow-up";
 import { assertPermission, getAuthenticatedProviderContext, hasPermission } from "../../../../server/auth/provider-context";
 import { ACTIVE_PATIENT_HEADER, clinicalActionError } from "../../../../server/http/clinical-http";
 
@@ -35,6 +36,18 @@ function optionalSurface(value: unknown): OmniboxSurface | undefined {
   return value as OmniboxSurface;
 }
 
+function optionalPriorQuestions(value: unknown): string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (
+    !Array.isArray(value) ||
+    value.length > MAX_PRIOR_QUESTIONS ||
+    value.some((item) => typeof item !== "string" || !item.trim() || item.length > 4000)
+  ) {
+    throw new Error("priorQuestions is invalid.");
+  }
+  return value.map((item: string) => item.trim());
+}
+
 export async function POST(req: Request) {
   try {
     const actor = getAuthenticatedProviderContext(req);
@@ -49,7 +62,7 @@ export async function POST(req: Request) {
     const body: unknown = await req.json();
     if (!isObject(body)) throw new Error("Omnibox planning request body must be an object.");
     for (const key of Object.keys(body)) {
-      if (key !== "query" && key !== "activePatientId" && key !== "activeSurface") {
+      if (key !== "query" && key !== "activePatientId" && key !== "activeSurface" && key !== "priorQuestions") {
         throw new Error(`Omnibox planning request contains an unexpected field: ${key}.`);
       }
     }
@@ -59,6 +72,7 @@ export async function POST(req: Request) {
 
     const activePatientId = optionalPatientId(body.activePatientId);
     const activeSection = optionalSurface(body.activeSurface);
+    const priorQuestions = optionalPriorQuestions(body.priorQuestions);
     const expectedPatientId = req.headers.get(ACTIVE_PATIENT_HEADER)?.trim() || undefined;
     if (expectedPatientId && expectedPatientId.length > 160) throw new Error("Active patient request context is invalid.");
 
@@ -67,6 +81,7 @@ export async function POST(req: Request) {
       activePatientId,
       activeSection,
       expectedPatientId,
+      priorQuestions,
     }, actor);
 
     return NextResponse.json({ success: true, plan });

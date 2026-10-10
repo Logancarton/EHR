@@ -139,6 +139,26 @@ export function turnAnswersForAnotherPatient(turn: ClinicalAiTurn): { id: string
   return { id: resolved.id, name: resolved.name };
 }
 
+/**
+ * The earlier questions a follow-up may be read against, oldest first.
+ *
+ * Only questions that were answered about this thread's patient: an answer about
+ * someone else, a workspace command, a failure or a clarification is not a
+ * question this patient's follow-ups continue. Only the clinician's words are
+ * sent; answers never are.
+ */
+export function priorQuestionsFor(turns: readonly ClinicalAiTurn[], limit: number): string[] {
+  return turns
+    .filter((turn) =>
+      turn.status === "answered" &&
+      turn.plan &&
+      !turn.plan.clarification &&
+      turnAnswersForAnotherPatient(turn) === null,
+    )
+    .map((turn) => turn.query)
+    .slice(-limit);
+}
+
 /** One line describing a settled turn, for collapsed earlier turns. */
 export function turnSummary(turn: ClinicalAiTurn): string {
   switch (turn.status) {

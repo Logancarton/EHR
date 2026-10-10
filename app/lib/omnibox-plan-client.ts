@@ -25,6 +25,8 @@ export type OmniboxPlanRequest = {
   query: string;
   activePatientId?: string;
   activeSurface?: OmniboxSurface;
+  /** Earlier questions in this patient's Clinical AI conversation, oldest first (D-132). */
+  priorQuestions?: string[];
 };
 
 export class OmniboxPlanError extends Error {
@@ -50,6 +52,7 @@ export async function requestOmniboxPlan(request: OmniboxPlanRequest): Promise<O
       query: request.query,
       activePatientId: request.activePatientId,
       activeSurface: request.activeSurface,
+      ...(request.priorQuestions?.length ? { priorQuestions: request.priorQuestions } : {}),
     }),
   });
 

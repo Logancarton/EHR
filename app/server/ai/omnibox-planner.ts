@@ -44,12 +44,19 @@ import { AdaptiveOmniboxPlanningModel } from "./adaptive-planning-model";
 import { defaultOllamaSynthesizer } from "./ollama-synthesizer";
 import { buildLongitudinalClinicalReasoning } from "./longitudinal-clinical-reasoner";
 import { isWorkspaceLookupQuery, resolveWorkspaceObjects } from "./workspace-object-resolver";
+import { resolveConversationFollowUp } from "./conversation-follow-up";
 
 export type OmniboxPlanInput = {
   query: string;
   activePatientId?: string;
   activeSection?: OmniboxSurface;
   expectedPatientId?: string;
+  /**
+   * Earlier questions in this patient's Clinical AI conversation, oldest first
+   * (D-132). The clinician's own words only; used to read a follow-up, never as
+   * evidence.
+   */
+  priorQuestions?: string[];
 };
 
 type PatientLookup =
@@ -57,6 +64,8 @@ type PatientLookup =
   | { status: "required"; requestedReference?: string }
   | { status: "not_found"; requestedReference: string }
   | { status: "ambiguous"; requestedReference: string; candidates: PatientRecord[] }
+  /** A partial name pointed away from the active patient; only a full name switches (D-132). */
+  | { status: "partial_name"; requestedReference: string; candidates: PatientRecord[]; active: PatientRecord }
   | { status: "not_required"; requestedReference?: undefined };
 
 function contextRole(role: ProviderContext["role"]): UserRole {
@@ -68,7 +77,7 @@ function normalize(value: string): string {
 }
 
 function patientIdentity(patient: PatientRecord): OmniboxPatientIdentity {
-  return { id: patient.id, name: patient.name };
+  return patient.dob ? { id: patient.id, name: patient.name, dob: patient.dob } : { id: patient.id, name: patient.name };
 }
 
 function patientRefFromIntent(intent: OmniboxPlannerIntent): string | undefined {
@@ -135,30 +144,95 @@ function resolvePlanPatient(
   const modelRef = patientRefFromIntent(intent);
   const plannerRef = modelRef && referenceAppearsInQuery(modelRef, query) ? modelRef : undefined;
   if (plannerRef) {
-    const matches = exactPatientMatches(plannerRef, patients);
-    if (matches.length === 1) {
-      return { status: "resolved", patient: matches[0], source: "mentioned_patient", requestedReference: plannerRef };
-    }
-    if (matches.length > 1) {
-      return { status: "ambiguous", requestedReference: plannerRef, candidates: matches };
-    }
-    return { status: "not_found", requestedReference: plannerRef };
+    return namedPatientLookup(plannerRef, exactPatientMatches(plannerRef, patients), query, activePatient);
   }
 
   const mentioned = mentionedPatients(query, patients);
-  if (mentioned.length === 1) {
-    return {
-      status: "resolved",
-      patient: mentioned[0],
-      source: "mentioned_patient",
-      requestedReference: mentioned[0].name,
-    };
-  }
-  if (mentioned.length > 1) {
-    return { status: "ambiguous", requestedReference: "patient mentioned in request", candidates: mentioned };
+  if (mentioned.length > 0) {
+    return namedPatientLookup(
+      mentioned.length === 1 ? wordsNamingPatient(mentioned[0], query) : "patient mentioned in request",
+      mentioned,
+      query,
+      activePatient,
+    );
   }
   if (activePatient) return { status: "resolved", patient: activePatient, source: "active_patient" };
   return { status: "required" };
+}
+
+/** The words of the request that name this patient, as the clinician wrote them. */
+function wordsNamingPatient(patient: PatientRecord, query: string): string {
+  const normalizedQuery = ` ${normalize(query.replace(/['’]s\b/gi, ""))} `;
+  if (normalizedQuery.includes(` ${normalize(patient.name)} `)) return patient.name;
+  const parts = patient.name.split(/\s+/).filter((part) => normalizedQuery.includes(` ${normalize(part)} `));
+  return parts.length ? parts.join(" ") : patient.name;
+}
+
+const ISO_DATE = /\b(\d{4})-(\d{1,2})-(\d{1,2})\b/g;
+const US_DATE = /\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g;
+
+/** Every date written in the text, as YYYY-MM-DD, whichever form it was written in. */
+function isoDates(text: string): string[] {
+  const found: string[] = [];
+  for (const match of text.matchAll(ISO_DATE)) {
+    found.push(`${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`);
+  }
+  for (const match of text.matchAll(US_DATE)) {
+    found.push(`${match[3]}-${match[1].padStart(2, "0")}-${match[2].padStart(2, "0")}`);
+  }
+  return found;
+}
+
+/** Dates of birth written in the request. Stored DOBs use both forms, so both are compared as dates. */
+function datesOfBirthInQuery(query: string): Set<string> {
+  return new Set(isoDates(query));
+}
+
+function patientDob(patient: PatientRecord): string | undefined {
+  return patient.dob ? isoDates(patient.dob)[0] : undefined;
+}
+
+/** The request names this patient in full (name, MRN or id), not by one name part. */
+function namedInFull(patient: PatientRecord, query: string): boolean {
+  const normalizedQuery = ` ${normalize(query.replace(/['’]s\b/gi, ""))} `;
+  return [patient.name, patient.mrn, patient.id]
+    .filter((value): value is string => Boolean(value))
+    .some((value) => normalizedQuery.includes(` ${normalize(value)} `));
+}
+
+/**
+ * Turns the patients a request named into one patient or a question (D-132).
+ *
+ * With a chart in front of the clinician, moving to someone else takes the full
+ * name (or MRN). A first name alone can belong to several people, and inside a
+ * patient's conversation the cost of guessing is an answer, or later an order,
+ * about the wrong person. So a partial name that points away from the active
+ * patient is offered back with date of birth, and nothing switches. A date of
+ * birth in the request narrows several matches to the one it belongs to.
+ */
+function namedPatientLookup(
+  reference: string,
+  matches: PatientRecord[],
+  query: string,
+  activePatient: PatientRecord | null,
+): PatientLookup {
+  if (matches.length === 0) return { status: "not_found", requestedReference: reference };
+
+  // A date of birth in the request that belongs to exactly one match identifies
+  // that patient, as a full name does.
+  const dobs = datesOfBirthInQuery(query);
+  const byDob = dobs.size ? matches.filter((patient) => dobs.has(patientDob(patient) ?? "")) : [];
+  const candidates = byDob.length === 1 ? byDob : matches;
+  if (candidates.length > 1) {
+    return { status: "ambiguous", requestedReference: reference, candidates };
+  }
+
+  const patient = candidates[0];
+  const identified = byDob.length === 1 || namedInFull(patient, query);
+  if (activePatient && patient.id !== activePatient.id && !identified) {
+    return { status: "partial_name", requestedReference: reference, candidates, active: activePatient };
+  }
+  return { status: "resolved", patient, source: "mentioned_patient", requestedReference: patient.name };
 }
 
 function patientState(activePatient: PatientRecord | null, lookup: PatientLookup): OmniboxPatientState {
@@ -173,7 +247,7 @@ function patientState(activePatient: PatientRecord | null, lookup: PatientLookup
       switchRequired: Boolean(active && active.id !== resolved.id),
     };
   }
-  if (lookup.status === "ambiguous") {
+  if (lookup.status === "ambiguous" || lookup.status === "partial_name") {
     return {
       active,
       requestedReference: lookup.requestedReference,
@@ -213,6 +287,16 @@ function clarificationFromPatientLookup(lookup: PatientLookup): OmniboxClarifica
       field: "patient",
       reason: "patient_not_found",
       message: `No authoritative patient record uniquely matched “${lookup.requestedReference}”. The active patient was not substituted.`,
+    };
+  }
+  if (lookup.status === "partial_name") {
+    const [candidate] = lookup.candidates;
+    return {
+      required: true,
+      field: "patient",
+      reason: "patient_full_name_required",
+      message: `“${lookup.requestedReference}” is only part of a name. Did you mean ${candidate.name}${candidate.dob ? ` (DOB ${candidate.dob})` : ""}? Use the full name to ask about another patient; this request stays unanswered and ${lookup.active.name} remains the patient.`,
+      candidates: lookup.candidates.map(patientIdentity),
     };
   }
   if (lookup.status === "ambiguous") {
@@ -589,7 +673,7 @@ function medicationReconciliationAnswer(
   };
 }
 
-async function answerClinicalQuestion(question: string, context: AssembledClinicalContext): Promise<{
+async function answerClinicalQuestion(question: string, context: AssembledClinicalContext, resultOffset = 0): Promise<{
   answer: string;
   evidence: OmniboxEvidenceReference[];
   insights?: OmniboxClinicalInsight[];
@@ -597,6 +681,12 @@ async function answerClinicalQuestion(question: string, context: AssembledClinic
   trajectory?: OmniboxPatientTrajectory;
 }> {
   const normalized = question.toLowerCase();
+  if (resultOffset > 0 && !labKeyword(question)) {
+    return {
+      answer: "Earlier results can be stepped through for lab questions only. Nothing earlier was looked up for this question.",
+      evidence: [],
+    };
+  }
   if (
     /\bchanged\b.*\b(last|prior)\s+visit|since\s+(?:the\s+)?last\s+visit/.test(normalized)
     || /\b(longitudinal|trajectory|trend|what should i pay attention to|what changed)\b/.test(normalized)
@@ -605,6 +695,25 @@ async function answerClinicalQuestion(question: string, context: AssembledClinic
   }
   if (/\b(summarize|summarise|recap)\b/.test(normalized) && /\b(chart|patient|record)\b/.test(normalized)) return boundedChartSummary(context);
   const keyword = labKeyword(question);
+  if (keyword && resultOffset > 0) {
+    // "The one before that": count back through this test's results, newest first.
+    const matching = context.recentLabs
+      .filter(item => item.testName.toLowerCase().includes(keyword))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const lab = matching[resultOffset];
+    if (lab) {
+      const value = `${lab.value}${lab.unit ? ` ${lab.unit}` : ""}`;
+      const position = resultOffset === 1 ? "The result before the most recent" : `Result ${resultOffset + 1} back from the most recent`;
+      return {
+        answer: `${position} ${lab.testName} was recorded on ${lab.date} at ${value}.`,
+        evidence: [evidence(lab.testName, `observations/${lab.id}`, `${lab.date}: ${value}`)],
+      };
+    }
+    return {
+      answer: `No earlier ${keyword} result appears in the bounded recent-lab context assembled for this request (${matching.length} found). Older results may exist outside it; none was inferred.`,
+      evidence: [],
+    };
+  }
   if (keyword) {
     const lab = context.recentLabs.find(item => item.testName.toLowerCase().includes(keyword));
     if (lab) {
@@ -754,12 +863,24 @@ export class OmniboxPlannerService {
     if (activePatientId && !activePatient) throw new Error("Active patient not found.");
     if (activePatientId) assertPatientAccess(actor, activePatientId);
 
+    // A follow-up in the Clinical AI conversation is planned as the question it
+    // continues (D-132). The patient is still resolved from this request's own
+    // words below, so "what about Jordan Reed?" asks about Jordan Reed and an
+    // unqualified follow-up stays with the active patient.
+    let reachablePatients: PatientRecord[] | null = null;
+    const reachable = () => (reachablePatients ??= PatientRepository.getManyByIds(accessiblePatientIds(actor)));
+    const followUp = input.priorQuestions?.length
+      ? resolveConversationFollowUp(query, input.priorQuestions, (text) => exactPatientMatches(text, reachable()).length > 0)
+      : { kind: "standalone" as const };
+    const plannedQuery = followUp.kind === "standalone" ? query : followUp.question;
+    const resultOffset = followUp.kind === "standalone" ? 0 : followUp.resultOffset;
+
     // Search/navigation requests resolve against permission-filtered authoritative
     // object owners before any model interpretation. The model never receives a
     // repository handle and cannot invent object identity or a navigation target.
-    const workspaceLookupRequested = isWorkspaceLookupQuery(query);
+    const workspaceLookupRequested = isWorkspaceLookupQuery(plannedQuery);
     const workspaceTargets: OmniboxWorkspaceTarget[] = workspaceLookupRequested
-      ? resolveWorkspaceObjects({ query, actor, activePatientId, limit: 12 })
+      ? resolveWorkspaceObjects({ query: plannedQuery, actor, activePatientId, limit: 12 })
       : [];
 
     // Language interpretation happens before clinical context retrieval for the
@@ -770,10 +891,10 @@ export class OmniboxPlannerService {
           confidence: workspaceTargets.length ? 0.99 : 0.95,
           intent: {
             kind: "workspace_lookup" as const,
-            request: query,
+            request: plannedQuery,
           },
         }
-      : await planWithModel(this.planningModel, { query });
+      : await planWithModel(this.planningModel, { query: plannedQuery });
     // A bare name or MRN ("Jordan", "Maya Chen", "P-10482") is a request to open
     // that chart; the omnibox row already offers "Open <name>" for it. It counts
     // only when every word belongs to one chart this clinician can reach, so
@@ -789,9 +910,7 @@ export class OmniboxPlannerService {
       }
     }
     // Natural-language patient resolution may only see charts this clinician can reach.
-    const patients = intentNeedsPatient(planned.intent)
-      ? PatientRepository.getManyByIds(accessiblePatientIds(actor))
-      : [];
+    const patients = intentNeedsPatient(planned.intent) ? reachable() : [];
     const lookup = resolvePlanPatient(planned.intent, query, activePatient, patients);
     const patient = lookup.status === "resolved" ? lookup.patient : null;
     const patientInfo = patientState(activePatient, lookup);
@@ -815,7 +934,7 @@ export class OmniboxPlannerService {
       }
     }
 
-    const desiredSurface = contextSurfaceForIntent(planned.intent, query);
+    const desiredSurface = contextSurfaceForIntent(planned.intent, plannedQuery);
     let assembled: AssembledClinicalContext | null = null;
     if (patient && desiredSurface) {
       assembled = ContextAssembler.assemble({
@@ -828,7 +947,7 @@ export class OmniboxPlannerService {
     }
 
     if (planned.intent.kind === "clinical_question" && assembled) {
-      const response = await answerClinicalQuestion(planned.intent.question, assembled);
+      const response = await answerClinicalQuestion(planned.intent.question, assembled, resultOffset);
       answer = response.answer;
       evidenceRefs.push(...response.evidence);
       insights = response.insights;
@@ -889,7 +1008,7 @@ export class OmniboxPlannerService {
     if (clarification) blockedReasons.push(clarification.reason);
 
     const navigationTarget = planned.intent.kind === "navigate_patient"
-      ? { ...planned.intent, section: sectionNamedInQuery(planned.intent.section, query) }
+      ? { ...planned.intent, section: sectionNamedInQuery(planned.intent.section, plannedQuery) }
       : null;
     const navigation = navigationTarget && patient
       ? {
@@ -925,6 +1044,9 @@ export class OmniboxPlannerService {
         model: this.planningModel.model,
       },
       patient: patientInfo,
+      followUp: followUp.kind === "standalone"
+        ? undefined
+        : { kind: followUp.kind, basedOn: followUp.basedOn, resultOffset: followUp.resultOffset },
       answer,
       evidence: evidenceRefs,
       insights,

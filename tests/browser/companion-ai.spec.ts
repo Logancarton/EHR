@@ -102,12 +102,34 @@ test.describe("Clinical AI Companion Panel", () => {
     await turns.first().getByRole("button", { name: "Collapse" }).click();
     await expect(turns.first().locator("[data-omnibox-plan-card]")).toHaveCount(0);
 
-    // Naming another patient answers about them, says so, and leaves the thread with Maya.
-    await input.fill("What medications is David Kim taking?");
+    // A first name alone does not move the conversation to someone else (CONV-1b).
+    await input.fill("What about David?");
     await input.press("Enter");
+    await expect(turns).toHaveCount(3);
+    await expect(turns.nth(2).locator("[data-omnibox-plan-clarification]")).toContainText(
+      /“David” is only part of a name\. Did you mean David Kim \(DOB [^)]+\)\?/,
+      { timeout: 20_000 },
+    );
+    await turns.nth(2).getByRole("button", { name: "Close AI plan" }).click();
+    await expect(turns).toHaveCount(2);
+
+    // "What about <full name>?" repeats the last question about that patient, says so,
+    // and leaves the thread with Maya. Only the earlier questions travel, never answers.
+    await input.fill("What about David Kim?");
+    const [aboutDavidRequest] = await Promise.all([
+      page.waitForRequest((candidate) => candidate.url().includes("/api/ai/omnibox/plan")),
+      input.press("Enter"),
+    ]);
+    expect(aboutDavidRequest.postDataJSON().priorQuestions).toEqual([
+      "What medications is she taking?",
+      "Summarize chart",
+    ]);
+    expect(aboutDavidRequest.postDataJSON().activePatientId).toBe("maya-chen");
     await expect(turns).toHaveCount(3);
     const aboutDavid = turns.nth(2);
     await expect(aboutDavid).toHaveAttribute("data-ai-turn-status", "answered", { timeout: 20_000 });
+    await expect(aboutDavid.locator("[data-omnibox-plan-follow-up]")).toContainText("Summarize chart");
+    await expect(aboutDavid.locator("[data-omnibox-plan-answer]")).toContainText("Bounded chart recap for David Kim");
     await expect(aboutDavid.locator("[data-ai-turn-other-patient]")).toContainText(
       "This answer is about David Kim, not Maya Chen",
     );

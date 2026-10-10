@@ -196,6 +196,8 @@ Do not treat model conversation history as the patient record.
 
 Long-term patient context belongs in structured clinical storage and auditable documents/events. AI memory should be derived from or linked back to those authoritative sources.
 
+The Clinical AI conversation (D-132) is session-only working state. The planner may receive the clinician's earlier questions to read a follow-up, but never earlier answers. Every answer is re-read from records, and the patient always comes from the current request's own words.
+
 ## Safety and action gating
 
 Require explicit clinician authorization before AI output causes consequential actions such as:
