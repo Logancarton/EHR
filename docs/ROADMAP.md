@@ -112,6 +112,8 @@ CB-0 through CB-5a, and the later CB-0a and CB-0b baseline repairs, are verified
 
 ## Open defects and follow-ups
 
+- **Dependency advisory with no fix yet (2026-10-09):** `braces` (GHSA-vfj7-8cjw-p6xm, high, denial of service from deeply nested patterns) reaches the repo only through lint tooling (`eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch`). No patched `braces` exists; `npm audit fix --force` would downgrade `eslint-config-next` to 14 and must not be used. It does not run in the app. Recheck with `npm audit` when updating dependencies. The critical Next.js advisories were fixed by moving to 16.3.8.
+
 - **Lost uncommitted AI work (found 2026-10-09):** another agent session drafted D-132 and a first-name patient lookup with a name/DOB check as `d-132-continuous-conversation.patch` and `omni-patient-dob-1.patch`. Neither reached `main` and neither file is on the development Mac. D-132 was rewritten from the owner's pasted summary, and the lookup was redone as CONV-1b. If the patches turn up, compare them with D-132 and CONV-1b rather than applying them blind.
 
 - **Omnibox patient result not clickable at narrow widths (found 2026-10-08):** `companion-overflow-fit` "Open workspace and patient overflow stay reachable with six patient tabs" fails at 1024×800 (timeout: the second patient's search result reports "not visible" then detaches) and at 720×450, and passes at 1440 and 1280. It fails the same way on `2e45518` without the D-131 record-tool changes, so the cause predates them. Not yet diagnosed.
