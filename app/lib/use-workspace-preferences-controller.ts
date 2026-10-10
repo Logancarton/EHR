@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api-client";
 import {
   applyPreset,
@@ -58,15 +58,21 @@ export function useWorkspacePreferencesController({
     usingBuiltIns: true,
   });
 
+  // Set once the clinician changes anything. The change is already on screen
+  // and on its way to the server, so the session's initial load, if it arrives
+  // afterwards, is older and must not put the previous layout back (a closed
+  // companion reopening, for example).
+  const changedSinceLoadRef = useRef(false);
+
   // Hydrate preferences from the authenticated session
   useEffect(() => {
     api.preferences
       .get()
       .then((remotePrefs) => {
-        if (remotePrefs) setPreferences(remotePrefs);
+        if (remotePrefs && !changedSinceLoadRef.current) setPreferences(remotePrefs);
       })
       .catch(() => {
-        setPreferences(loadPreferences());
+        if (!changedSinceLoadRef.current) setPreferences(loadPreferences());
       });
 
     void fetchPracticeTemplates().then(setPracticeTemplates);
@@ -78,6 +84,7 @@ export function useWorkspacePreferencesController({
    */
   const persistPreferences = useCallback(
     (updated: ProviderPreferences) => {
+      changedSinceLoadRef.current = true;
       setPreferences(updated);
       api.preferences.save(updated).catch(() => {
         // The workspace still reflects the change; only durability was lost.

@@ -8,6 +8,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### RELIABILITY-PREFS-1 — a late startup layout load no longer undoes the clinician's change; full suite green in chunks (2026-10-10)
+
+- **Starting SHA:** f6d5189.
+- **Full browser suite, run in five chunks of 15–16 files:** 76 of 77 files passed. `rail-personalization` failed about one run in three: after reload, closing the Calculators panel saved, but the panel came back.
+- **Cause:** `useWorkspacePreferencesController` applied the session's initial `GET /api/preferences` whenever it resolved. If the clinician changed a preference first, such as closing a companion, the older server snapshot arriving afterwards replaced it. Fix: once `persistPreferences` has run, a late initial load (or its local fallback) is ignored. The change it would overwrite is already on screen and saved.
+- **Validation:** `rail-personalization` 5/5 isolated runs after the fix (2/3 before); `npm run check` 685/685 (0 lint errors); `npm run build` passed. Chunks 1–4 (61 files) ran before this one-file fix and chunk 5 (15 files) after; every file passed apart from the one fixed.
+- **Named gaps:** published CI on the pushed commit has not been confirmed. The race was diagnosed from code and the before/after pass rate, not reproduced deterministically. There is no hook-level unit test for the controller.
+
 ### RELIABILITY-OMNIBOX-1 — search panel no longer closes under the clinician; full-run failures triaged (2026-10-09)
 
 - **Starting SHA:** a272f2b.
