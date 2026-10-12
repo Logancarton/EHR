@@ -57,17 +57,23 @@ export async function resetWorkspaceLayout(
   const panes = page.locator(".detached-patient-pane");
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    // The rail-pin hook deliberately migrates a non-default local cache back to the
-    // server when the server still has defaults. A browser test that promises the
-    // default layout must clear that cache too, otherwise a prior test can silently
-    // repopulate stale rail pins after this helper resets the server preferences.
-    await page.evaluate(() => window.localStorage.clear()).catch(() => {});
-
-    // Tear the live page down before writing. The loaded workspace autosaves on a
-    // debounce, so a save capturing the pre-reset DOM could land after the reset and
-    // win — leaving the reload to restore exactly the state being reset away from.
-    // A blank page has no timers to race with.
-    await page.goto("about:blank");
+    // Stop the application before clearing its cache. Clearing on the live page
+    // races startup preference reads: a late response can refill localStorage,
+    // then the next mount migrates those old pins over the freshly reset server.
+    // An inert same-origin document retains storage access without application
+    // effects, timers, or reads. This route exists only in the browser fixture.
+    const resetUrl = new URL("/__browser-layout-reset", page.url()).href;
+    await page.route(resetUrl, (route) => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<!doctype html><title>Reset browser layout</title>",
+    }));
+    try {
+      await page.goto(resetUrl);
+      await page.evaluate(() => window.localStorage.clear());
+    } finally {
+      await page.unroute(resetUrl);
+    }
 
     const preferencesResponse = await page.request.put("/api/preferences", {
       data: { preferences: defaultPreferences },

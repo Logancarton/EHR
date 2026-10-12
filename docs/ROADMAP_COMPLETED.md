@@ -8,6 +8,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+### RELIABILITY-PINS-2 — Cancel stale pin reads and quiesce layout resets (2026-10-12)
+
+- **Starting SHA:** `65fd980`; resulting SHA is the commit containing this entry. Requirements TOOL-03 / TRUST-03, workspace preference lifecycle and validation layer. This is a shared lifecycle repair, not a clinical model or transport change.
+- **Evidence and repair:** CI traces showed default rail reset/read success followed by two writes restoring old Calculators pins. The shared test fixture now clears local storage from an inert same-origin document after stopping the application, rather than racing active startup reads. A focused run then exposed an unpin being undone; startup pin reads now cancel on pin events, storage changes and unmount. Cancelled response bodies cannot rewrite the local cache or trigger migration/adoption. Existing clinical and rail assertions are unchanged.
+- **Validation:** `npm run check` passed 687/687 tests with lint/typecheck; a new delayed-response regression verifies that an invalidated read preserves newer cached pins. `rail-personalization` and `workspace-reliability` passed 6/6 in isolated run `run-agACiv`. The earlier fixture-only run failed one rail unpin case; it is not counted as a pass. The first check overlapped browser generation and failed repository hygiene; the sequential rerun passed. `npm run build` passed.
+- **Visual evidence:** inspected refreshed [1440](../output/playwright/reliability-chart-1440.png), [1280](../output/playwright/reliability-chart-1280.png), [1024](../output/playwright/reliability-chart-1024.png) and [720×450](../output/playwright/reliability-chart-720.png) synthetic chart screenshots plus the rail reload screenshot in the isolated run. Patient identity and Review & Sign remain visible. Short-height scrolling remains the existing ROADMAP usability follow-up; no visual redesign was made.
+- **Limits:** local verification does not certify the complete CI gate or every migration race. Published CI and previously unexplained setup connection resets remain open in ROADMAP. Next eligible product slice remains CONV-2.
+
 ### RELIABILITY-CI-1 — Full isolated Chromium CI verified (2026-10-11)
 
 - **Baseline and scope:** clean `main` at `123c2c46ea893613a78ef66201fd6d7f4ae97175`; resulting SHA is the commit containing this entry. TRUST-03 / validation evidence layer. Documentation complete; no runtime behavior changed. Reconciled stale pending/failed CI statements in ROADMAP while preserving uncertain causes and product acceptance gaps.

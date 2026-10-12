@@ -87,6 +87,7 @@ test("companion selection and open state survive rail collapse and reload", asyn
     "aria-pressed",
     "false",
   );
+  await page.screenshot({ path: test.info().outputPath("rail-reload-verified.png") });
 });
 
 /**

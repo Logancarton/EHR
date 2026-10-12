@@ -46,10 +46,14 @@ export function useToolPins(): {
   useEffect(() => {
     // Paint from the local cache first so the rails are never briefly wrong,
     // then reconcile with the server, which is the durable copy.
+    // Startup reconciliation must not outlive this mount or overwrite a newer
+    // local/cross-tab edit, including through its local-storage cache write.
+    const controller = new AbortController();
     const cached = readToolPins();
     adopt(cached);
 
-    void fetchToolPins().then((server) => {
+    void fetchToolPins(controller.signal).then((server) => {
+      if (controller.signal.aborted) return;
       // A clinician who arranged their rails before they were server-backed has
       // that arrangement only in this browser. If the server is still at the
       // defaults, their local one is the more meaningful of the two — send it up
@@ -64,16 +68,21 @@ export function useToolPins(): {
 
     function handleChange(event: Event) {
       const detail = (event as CustomEvent<ToolPins>).detail;
-      if (detail) adopt(detail);
+      if (detail) {
+        controller.abort();
+        adopt(detail);
+      }
     }
     // Another tab editing the same record also counts as a change.
     function handleStorage() {
+      controller.abort();
       adopt(readToolPins());
     }
 
     window.addEventListener(TOOL_PINS_CHANGED_EVENT, handleChange);
     window.addEventListener("storage", handleStorage);
     return () => {
+      controller.abort();
       window.removeEventListener(TOOL_PINS_CHANGED_EVENT, handleChange);
       window.removeEventListener("storage", handleStorage);
     };

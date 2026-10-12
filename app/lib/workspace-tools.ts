@@ -262,9 +262,9 @@ export function pinnedTools(pins: ToolPins, side: RailSideKey): WorkspaceTool[] 
 
 
 /** Reads the server-held rails, falling back to the local cache when offline. */
-export async function fetchToolPins(): Promise<ToolPins> {
+export async function fetchToolPins(signal?: AbortSignal): Promise<ToolPins> {
   try {
-    const response = await fetch("/api/preferences");
+    const response = await fetch("/api/preferences", { signal });
     if (!response.ok) return readToolPins();
     const body = await response.json();
     const rails = body?.preferences?.rails;
@@ -278,7 +278,7 @@ export async function fetchToolPins(): Promise<ToolPins> {
       right: right ?? DEFAULT_PINS.right,
     };
     const normalized = normalizeToolPins(pins);
-    cacheToolPins(normalized);
+    if (!signal?.aborted) cacheToolPins(normalized);
     return normalized;
   } catch {
     // An unreachable server should not empty the rails.
