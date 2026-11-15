@@ -128,7 +128,6 @@ export default function LabResultEntryForm({
     if (!canSave) return;
     setSaving(true);
     setError("");
-    const grouped = analytes.length > 1 || Boolean(orderId);
     let saved = 0;
     try {
       for (const row of analytes) {
@@ -143,7 +142,8 @@ export default function LabResultEntryForm({
           referenceRange: row.referenceRange.trim() || undefined,
           interpretation: row.interpretation || undefined,
           orderId: orderId || undefined,
-          reportRef: grouped && !orderId ? reportRef : undefined,
+          // The form owns the report identity, not the number of unsaved rows.
+          reportRef: !orderId ? reportRef : undefined,
         });
         saved += 1;
         // A saved row leaves the form, so a retry after a failure cannot file it twice.

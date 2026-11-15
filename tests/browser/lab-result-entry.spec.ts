@@ -83,3 +83,42 @@ test("lab entry clears a prior test code and uses the practice day while travell
     await context.close();
   }
 });
+
+
+test("retrying the last unsaved analyte preserves its report identity", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInWithDefaultLayout(page, "Prototype provider");
+  await page.locator(".browser-tab[data-workspace-tab='patient']").filter({ hasText: "Maya Chen" }).click();
+  await page.locator('.companion-rail-btn[data-tool-id="labs"]').click();
+  await page.getByRole("tab", { name: "Record & review", exact: true }).click();
+  await page.locator('[data-companion-panel="labs"]').getByRole("button", { name: "Expand to main canvas" }).click();
+  await page.getByRole("button", { name: "Record result", exact: true }).click();
+  const form = page.getByRole("form", { name: /Record a lab result for Maya Chen/ });
+  await form.getByLabel("Test name", { exact: true }).fill("Retry report first analyte");
+  await form.getByLabel("Result", { exact: true }).fill("10");
+  await form.getByRole("button", { name: /Add another result/ }).click();
+  await form.getByLabel("Test name (result 2)", { exact: true }).fill("Retry report second analyte");
+  await form.getByLabel("Result (result 2)", { exact: true }).fill("20");
+  const submitted: Array<{ testName: string; reportRef?: string }> = [];
+  await page.route("**/api/clinical-records", async (route) => {
+    const request = route.request();
+    if (request.method() !== "POST") return route.continue();
+    const body = request.postDataJSON();
+    if (body.type !== "add_observation") return route.continue();
+    submitted.push(body.payload);
+    if (submitted.length === 2) {
+      return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Synthetic interrupted save" }) });
+    }
+    return route.continue();
+  });
+  await form.getByRole("button", { name: "Save 2 results", exact: true }).click();
+  await expect(form.getByRole("alert")).toContainText("1 saved");
+  await expect(form.getByLabel("Test name", { exact: true })).toHaveValue("Retry report second analyte");
+  await page.screenshot({ path: "output/playwright/lab-report-partial-save.png" });
+  await form.getByRole("button", { name: "Save result", exact: true }).click();
+  await expect(page.locator(".lab-entry-saved")).toBeVisible();
+  expect(submitted).toHaveLength(3);
+  expect(submitted[0].reportRef).toBeTruthy();
+  expect(submitted[2].reportRef).toBe(submitted[0].reportRef);
+  expect(submitted.filter((row) => row.testName === "Retry report first analyte")).toHaveLength(1);
+});

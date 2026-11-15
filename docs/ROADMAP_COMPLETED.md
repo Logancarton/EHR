@@ -8,6 +8,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 
 ## Completion log
 
+
+### LAB-RETRY-1 — Preserve a report across partial-save retries (2026-11-15)
+
+- **Baseline:** clean `84da0f8`; resulting SHA is the commit containing this entry. Owner-directed clinical-loop review / TRUST-03. This repairs form transaction identity through the existing clinical-record boundary, not clinical interpretation or transport.
+- **Confirmed failure and repair:** after the first of two analytes saved and the second failed, retrying the remaining row omitted its report reference because grouping depended on the number of remaining rows. The form now supplies its stable report reference for every unlinked result, including single-result reports. Linked orders retain their existing grouping authority. No saved observations are rewritten.
+- **Validation:** the new browser regression failed on the original code (retry reference was undefined), then all three lab-entry cases passed in isolated run `run-ayzXUJ`. It drives a real successful first save, a synthetic second-request failure, and a successful retry; verifies stable identity and that the first analyte is submitted only once. `npm run check` passed lint/typecheck and 687 tests (existing lint warnings remain); `npm run build` passed. Inspected the fresh [partial-save screenshot](../output/playwright/lab-report-partial-save.png): patient identity, error feedback and retry action remain visible.
+- **Limits:** the policy for editing the collected date or linked order after a partial save is deferred in ROADMAP. This is a bounded state-identity repair, not full transaction atomicity or P12/production certification. Cross-browser coverage and the historical signing intermittency remain open.
+
 ### RELIABILITY-PINS-2 — Cancel stale pin reads and quiesce layout resets (2026-10-12)
 
 - **Starting SHA:** `65fd980`; resulting SHA is the commit containing this entry. Requirements TOOL-03 / TRUST-03, workspace preference lifecycle and validation layer. This is a shared lifecycle repair, not a clinical model or transport change.
