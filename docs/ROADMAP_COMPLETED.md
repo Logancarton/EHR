@@ -9,6 +9,14 @@ The log of finished work and its evidence. Unfinished work, the ordered queue an
 ## Completion log
 
 
+### MED-MONITOR-1 — Route vital monitoring to the existing vitals form (2026-11-15)
+
+- **Baseline:** clean `8b30c2b`; resulting SHA is the commit containing this entry. Owner-directed clinical-loop review / TRUST-03. The repaired layer is monitoring action routing, using the shared protocol's `measureKind`, not medication-name matching or new clinical guidance.
+- **Confirmed defect:** MedicationTruthPanel offered a lab action for every monitoring protocol, including protocols already classified as vital signs. Vital protocols now offer Record vitals and open the existing patient-bound PatientVitalsModal; lab protocols retain their lab draft action. Successful vitals recording invalidates the monitoring snapshot through the existing cancellable read effect. Persistence, measurement validation and protocol intervals are unchanged.
+- **Validation:** all seven medication-hierarchy browser cases passed in isolated run `run-08u9oq`, including the new real-control check for correct patient identity, vitals dialog, dismissal and retained lab action. `npm run check` passed lint/typecheck and all 687 tests (existing lint warnings remain); `npm run build` passed. Inspected updated medication screenshots at 1440, 1280, 1024 and 200% zoom plus the [vitals dialog](../output/playwright/medication-monitoring-vitals.png). The [prior review screenshot](../output/playwright/medication-monitoring-review.png) remains historical evidence.
+- **Scope:** resolves the medication monitoring action uncertainty in ROADMAP. This is a shared classification-based routing repair, not a new monitoring engine. Existing modal/patient lifecycle and snapshot reads remain coupled; P12 and cross-browser acceptance remain open.
+
+
 ### LAB-RETRY-1 — Preserve a report across partial-save retries (2026-11-15)
 
 - **Baseline:** clean `84da0f8`; resulting SHA is the commit containing this entry. Owner-directed clinical-loop review / TRUST-03. This repairs form transaction identity through the existing clinical-record boundary, not clinical interpretation or transport.

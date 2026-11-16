@@ -165,3 +165,20 @@ test("late medication data from the prior patient cannot replace the foreground 
   await expect(panel.getByText("Synthetic late Maya medication", { exact: true })).toHaveCount(0);
   await expect(panel.locator("article").first()).toContainText("Lamotrigine");
 });
+
+
+test("vital monitoring opens the bound patient's vitals instead of a lab order", async ({ page }) => {
+  await openMedications(page);
+  const panel = panelFor(page);
+  const medication = panel.locator("article").filter({ hasText: "Guanfacine" });
+  await expect(medication).toContainText("Resting blood pressure & pulse");
+  await expect(medication.getByRole("button", { name: /lab/i })).toHaveCount(0);
+  await medication.getByRole("button", { name: "Record vitals", exact: true }).click();
+  const vitals = page.locator(".vitals-modal-container");
+  await expect(vitals).toBeVisible();
+  await expect(vitals).toContainText("Maya Chen");
+  await page.screenshot({ path: "output/playwright/medication-monitoring-vitals.png" });
+  await page.keyboard.press("Escape");
+  await expect(vitals).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Reorder lab", exact: true })).toBeVisible();
+});

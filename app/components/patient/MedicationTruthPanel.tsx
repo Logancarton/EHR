@@ -12,6 +12,7 @@ import MedicationReconciliationPanel from "./MedicationReconciliationPanel";
 import styles from "./PatientMedications.module.css";
 import Button from "../ui/Button";
 import Icon from "../ui/Icon";
+import PatientVitalsModal from "./PatientVitalsModal";
 
 type MedicationDraft = {
   displayText: string;
@@ -76,6 +77,8 @@ export default function PatientMedications({
   const [showForm, setShowForm] = useState(false);
   const [history, setHistory] = useState<{ title: string; data: ClinicalRecordHistory } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [vitalsOpen, setVitalsOpen] = useState(false);
+  const [vitalsRevision, setVitalsRevision] = useState(0);
   const [error, setError] = useState("");
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   // Monitoring evidence comes from this patient's record, like the Labs section;
@@ -115,7 +118,7 @@ export default function PatientMedications({
         }
       });
     return () => { cancelled = true; };
-  }, [patient.id]);
+  }, [patient.id, vitalsRevision]);
 
   const activeMedications = useMemo(
     () => medications.filter((medication) => medication.status === "active"),
@@ -354,7 +357,9 @@ export default function PatientMedications({
               {protocol && (
                 <div className={`${styles.monitoring} ${protocol.status === "current" ? "" : styles.monitoringDue}`}>
                   <span><strong>{protocol.requiredLab}</strong> · {protocol.status.replaceAll("-", " ")} · {protocol.intervalLabel}</span>
-                  {onDraftOrder && <Button size="sm" onClick={() => onDraftOrder(protocol.requiredLab)}>{protocol.status === "overdue" ? "Draft lab" : "Reorder lab"}</Button>}
+                  {protocol.measureKind === "vital"
+                    ? <Button size="sm" onClick={() => setVitalsOpen(true)}>Record vitals</Button>
+                    : onDraftOrder && <Button size="sm" onClick={() => onDraftOrder(protocol.requiredLab)}>{protocol.status === "overdue" ? "Draft lab" : "Reorder lab"}</Button>}
                 </div>
               )}
             </article>
@@ -455,6 +460,7 @@ export default function PatientMedications({
           </div>
         );
       })()}
+      <PatientVitalsModal patient={patient} isOpen={vitalsOpen} onClose={() => setVitalsOpen(false)} onVitalsRecorded={() => setVitalsRevision((value) => value + 1)} />
     </section>
   );
 }
